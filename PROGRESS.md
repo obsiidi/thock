@@ -5,8 +5,9 @@
 - SPM-Paket, tools-version 5.9 (Swift-5-Sprachmodus), Plattform macOS 13.
 - Targets: `CAtomics` (C-Shim, 4 Acquire/Release-Atomics) und `thock` (Executable).
 - `swift build` debug + release: 0 Warnungen.
-- Ausgabegerät beim Entwickler: "MacBook Pro Speakers", **44.1 kHz**, io_frames=512,
-  presentation_ms=1.25.
+- Ausgabegerät beim Entwickler: "MacBook Pro Speakers", **48 kHz** (Phase 1 hatte
+  fälschlich 44.1 kHz gemeldet — `mainMixerNode.outputFormat` liefert vor `prepare()`
+  einen Default), Puffer-Range 15…4096 Frames, presentation_ms=1.25.
 
 ## Phase 0 — Tastenerfassung ✅
 Abgenommen am 2026-09-12.
@@ -74,18 +75,60 @@ Befunde:
 - Entscheidung: Autorepeat klickt nicht (`Pipeline.clickOnRepeat = false`).
 - Modifier (`flagsChanged`) bleiben bis Phase 3 stumm.
 
+## Phase 2 — Audio-Engine ✅
+Abgenommen am 2026-09-12.
+
+⚠️ **Architekturabweichung:** Der Voice-Pool ist **kein** Pool aus 16
+`AVAudioPlayerNode` mehr, sondern ein eigener Mixer in einem
+`AVAudioSourceNode` (`VoiceMixer.swift`). Grund, gemessen: `scheduleBuffer` des
+Player-Nodes startete Buffer sporadisch 20–30 ms zu spät — bei 64, 128, 256 und
+512 Frames, mit und ohne Varispeed, mit und ohne `.interrupts`, auch mit nur
+einem Node. Muster: ein Ausreißer, dann Rampe über ~5 Events zurück auf normal.
+Per `.dataRendered`-Callback unabhängig bestätigt. Mit dem Source-Node ist die
+Latenz deterministisch (max. ein IO-Puffer + Ausgabe-Offset).
+
+- `VoiceMixer.swift`: `AVAudioSourceNode`, 16 Voices in festem Array hinter
+  Raw-Pointern, Sample-Tabelle (max. 512, Phase 3), `CommandRing` (SPSC) vom
+  Trigger-Thread in den Render-Block. Pitch = lineare Interpolation mit `rate`.
+  Round-Robin; eine Voice wird ohne Fade überschrieben, wenn alle 16 belegt sind.
+  `startLog` (SPSC) protokolliert jeden Voice-Start mit Render-Zeitstempel.
+- `AudioEngine.swift`: Engine-Format = Hardware-Rate aus
+  `outputNode.outputFormat(forBus:)` (nicht Mixer-Format!), IO-Puffer über
+  `kAudioDevicePropertyBufferFrameSize` (Default 128, `--io-frames`),
+  `kAudioDeviceProcessorOverload`-Listener als Dropout-Zähler.
+- `Pipeline.swift`: xorshift-Jitter `rate = 1 ± 0.03` (`--jitter`).
+- `KeyTap.swift`: Disable-Gründe getrennt gezählt (timeout / userInput).
+- `--selftest [--count N] | --burst N`: Latenz `e2r_us` = Event → Render-Zyklus,
+  der die Voice startet (aus `startLog`); extern bestätigt durch Onset-Detektor
+  am Mixer-Tap (`agree_us` = 0 im Spaced-Modus) und Energie-Bilanz
+  (`energy_ratio` ≈ N Klicks, ±10 %).
+
+Messwerte (Debug-Build, 48 kHz, io_frames=128):
+```
+spaced 50:  voices_started=50/50 onsets=50/50 energy=47.6/50 overloads=0
+            e2r_us min=3839 median=5459 p95=6346 max=6374
+burst 20:   voices_started=20/20 energy=18.9/20 overloads=0 mixer_peak=0.59
+            e2r_us min=3745 median=5246 p95=6362 max=6362
+burst 40:   voices_started=40/40 energy=38.4/40 overloads=0  (Pool überbucht, OK)
+io 64:      e2r_us median=3380 p95=3692 (spaced), 3065/3648 (burst), 0 overloads
+io 512:     e2r_us median=17634 p95=21477  (Vergleich)
+```
+Energie liegt ~5 % unter N: lineare Interpolation dämpft bei 3 kHz leicht.
+
 ## Offene Punkte
-- Ein Player-Node: schnelles Tippen retriggert (`.interrupts`) statt zu
-  überlappen → Voice-Pool in Phase 2.
-- Bei Gerätewechsel mit anderer Samplerate resampelt der Mixer zur Laufzeit;
-  Neu-Dekodieren der Buffer bei Config-Change steht aus (Phase 2/4).
-- `render_us` nutzt `AVAudioTime.hostTime` des Mixer-Taps; Genauigkeit
-  ungeprüft, nur informativ.
-- Keine Realtime-Thread-Policy für Tap-/Trigger-Thread.
+- 64 Frames laufen ohne Overloads und halbieren die Latenz. Default bleibt 128
+  (Spezifikation); Umschalten in Phase 4 als Option denkbar.
+- Bei Gerätewechsel mit anderer Samplerate resampelt der AVAudioEngine-Mixer
+  zur Laufzeit; Neu-Dekodieren der Sample-Tabelle steht aus (Phase 3/4).
+- Sample-Tabelle ist nur vor `engine.start()` befüllbar (Phase 3: Pack-Wechsel
+  → Engine stoppen, neu laden, starten).
+- Keine Realtime-Thread-Policy für Tap-/Trigger-Thread; Latenz dort ~0,1 ms,
+  nicht nötig.
+- Sporadisches `reenabled=1` in Phase-2-Zwischenläufen gesehen (Grund nicht
+  protokolliert, seitdem Zähler getrennt). Kein Event ging verloren.
 
 ## Nächster Schritt
-Phase 2 — Audio-Engine: Pool aus 16 `AVAudioPlayerNode` im Round-Robin,
-Pitch-Jitter ±3 % über `playbackRate` (AVAudioUnitVarispeed oder
-`AVAudioUnitTimePitch`), `kAudioDevicePropertyBufferFrameSize` = 128,
-`--selftest --burst 20` (20 Anschläge in 200 ms): 20 Voices, 0 Dropouts,
-p95-Latenz < 8 ms.
+Phase 3 — Sound-Packs: Mechvibes-`config.json` parsen (v1 single-file mit
+`[start_ms, dauer_ms]`, v2 multi-file), Buffer schneiden und in die
+Sample-Tabelle laden, `Scancodes.swift` CGKeyCode → Windows-Scancode,
+`--list-packs`, `--diag` zeigt Sample-ID pro Taste. Pack liegt unter `packs/`.

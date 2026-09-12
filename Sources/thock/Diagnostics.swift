@@ -59,8 +59,11 @@ func formatLine(_ e: KeyEvent) -> String {
     }
     let sched = Clock.schedMicros(e).map(String.init) ?? "-"
     let lat = Clock.latMicros(e).map(String.init) ?? "-"
+    let voice = e.scheduled == 0 ? "-" : "\(e.voice)"
+    let rate = e.scheduled == 0 ? "-" : String(format: "%.3f", e.rate)
     return "\(kind) code=\(e.keyCode) rep=\(e.autorepeat) syn=\(e.synthetic) "
         + "tap_us=\(Clock.tapMicros(e)) sched_us=\(sched) lat_us=\(lat) "
+        + "voice=\(voice) rate=\(rate) "
         + "flags=0x\(String(e.flags, radix: 16)) ts=\(e.timestamp) seq=\(e.seq)"
 }
 
@@ -194,11 +197,12 @@ final class SyntheticKeys {
         up.post(tap: .cghidEventTap)
     }
 
-    /// Presses `count` times with `spacingMicros` between key-downs.
+    /// Presses `count` times with `spacingMicros` between key-downs
+    /// (press() itself holds the key for 2 ms).
     func burst(_ count: Int, spacingMicros: UInt32) {
         for _ in 0..<count {
             press()
-            usleep(spacingMicros)
+            usleep(spacingMicros > 2_000 ? spacingMicros - 2_000 : 0)
         }
     }
 }
@@ -238,9 +242,9 @@ final class EventCollector {
 
 // MARK: - Audio setup shared by run / diag / selftest
 
-func makeAudio(samplePath: String) -> AudioEngine? {
+func makeAudio(samplePath: String, bufferFrames: UInt32) -> AudioEngine? {
     do {
-        let audio = try AudioEngine()
+        let audio = try AudioEngine(bufferFrames: bufferFrames)
         try audio.loadClick(url: URL(fileURLWithPath: samplePath))
         try audio.start()
         return audio
@@ -251,8 +255,26 @@ func makeAudio(samplePath: String) -> AudioEngine? {
 }
 
 func describe(_ d: AudioEngine.DeviceInfo) -> String {
-    "device=\"\(d.name)\" rate=\(Int(d.sampleRate)) ch=\(d.channels) "
-        + "io_frames=\(d.bufferFrames) presentation_ms=\(String(format: "%.2f", d.presentationLatencyMs))"
+    let presentation = String(format: "%.2f", d.presentationLatencyMs)
+    return "device=\"\(d.name)\" rate=\(Int(d.sampleRate)) ch=\(d.channels) "
+        + "io_frames=\(d.bufferFrames) (requested \(d.bufferFramesRequested)) "
+        + "presentation_ms=\(presentation)"
+}
+
+/// Sum of squares per channel, averaged over channels: the energy of one
+/// click, used as the yardstick for the mixer energy in the self-test.
+func energy(of buffer: AVAudioPCMBuffer) -> Double {
+    guard let data = buffer.floatChannelData else { return 0 }
+    let channels = Int(buffer.format.channelCount)
+    let frames = Int(buffer.frameLength)
+    var total = 0.0
+    for ch in 0..<channels {
+        for i in 0..<frames {
+            let v = Double(data[ch][i])
+            total += v * v
+        }
+    }
+    return total / Double(channels)
 }
 
 // MARK: - run / --diag
@@ -290,11 +312,12 @@ enum LogMode {
     case all
 }
 
-func runMain(samplePath: String, log: LogMode?) -> Int32 {
+func runMain(samplePath: String, bufferFrames: UInt32, jitter: Float, log: LogMode?) -> Int32 {
     guard ensureListenPermission() else { return 2 }
-    guard let audio = makeAudio(samplePath: samplePath) else { return 4 }
+    guard let audio = makeAudio(samplePath: samplePath, bufferFrames: bufferFrames) else { return 4 }
 
     let pipeline = Pipeline(audio: audio)
+    pipeline.jitter = jitter
     let stats = DiagStats()
     let drain = Drain(ring: pipeline.logRing) { e in
         stats.record(e)
@@ -313,7 +336,8 @@ func runMain(samplePath: String, log: LogMode?) -> Int32 {
     }
     drain.start()
 
-    stderrLine("thock: running. \(describe(audio.deviceInfo())) click_frames=\(audio.clickFrames)")
+    stderrLine("thock: running. \(describe(audio.deviceInfo())) click_frames=\(audio.clickFrames) "
+        + "voices=\(VoiceMixer.voiceCount)")
     if log != nil {
         stderrLine("thock: --diag " + (log == .all ? "(keyDown, keyUp, flagsChanged)" : "(keyDown only; --all for everything)"))
     }
@@ -327,40 +351,64 @@ func runMain(samplePath: String, log: LogMode?) -> Int32 {
         audio.stop()
         fflush(stdout)
         stderrLine("thock: stopped. \(stats.summary()) clicks=\(pipeline.triggerCount) "
+            + "voices_started=\(audio.mixer.voicesStarted) "
             + "seen=\(pipeline.tap.eventCount) dropped=\(pipeline.tapRing.droppedCount + pipeline.logRing.droppedCount) "
-            + "reenabled=\(pipeline.tap.reenableCount)")
+            + "commands_dropped=\(audio.mixer.commandsDropped) "
+            + "reenabled=\(pipeline.tap.reenableCount) (\(pipeline.tap.disableReasons)) overloads=\(audio.overloadCount)")
         exit(0)
     }
     sigint.resume()
     dispatchMain()
 }
 
-// MARK: - --selftest (Phase 1: latency to scheduleBuffer + render proof)
+// MARK: - --selftest
 
-/// Listens on the main mixer output and records the host time of every
-/// silence -> sound transition. With clicks 100 ms apart and a click that is
-/// below threshold after 40 ms, one edge == one rendered click.
-final class RenderEdgeDetector {
+/// Probe on the main mixer output: detects click onsets, integrates energy
+/// and tracks the peak.
+///
+/// Onsets: `fast` is a peak-hold with 0.3 ms decay (tracks the click
+/// envelope), `ref` is the max of `fast` over the window 1–2 ms earlier. An
+/// onset is a sample where fast > threshold and fast > 2 × ref, with a 4 ms
+/// refractory period. Reliable for isolated clicks (spaced mode); inside a
+/// burst overlapping tails can hide an onset, so bursts are judged by
+/// energy and by the render block's own start log instead.
+final class MixerProbe {
     private let lock = NSLock()
-    private var edges: [UInt64] = []   // host ticks
-    private var loud = false
-    private var silentRun = 0
-    private let threshold: Float = 0.01          // -40 dBFS
-    private let silenceFrames: Int               // how long below threshold before "quiet"
+    private var onsets: [UInt64] = []   // host ticks
     private var peakSeen: Float = 0
+    private var energySum = 0.0
+    private var node: AVAudioNode?
+
+    private let threshold: Float = 0.01          // -40 dBFS
+    private let ratio: Float = 2.0
+    private let fastDecay: Float
+    private let refractoryFrames: Int
+    private let win1: Int                        // 1 ms in frames
+    private let win2: Int                        // 2 ms in frames
+    private var fast: Float = 0
+    private var history: [Float]                 // ring of `fast`, win2 long
+    private var histIndex = 0
+    private var frameCounter = 0
+    private var lastOnsetFrame = Int.min / 2
 
     init(sampleRate: Double) {
-        silenceFrames = Int(sampleRate * 0.020)
+        fastDecay = Float(exp(-1.0 / (0.0003 * sampleRate)))
+        refractoryFrames = Int(sampleRate * 0.004)
+        win1 = Int(sampleRate * 0.001)
+        win2 = Int(sampleRate * 0.002)
+        history = [Float](repeating: 0, count: win2)
     }
 
     func install(on node: AVAudioNode) {
+        self.node = node
         node.installTap(onBus: 0, bufferSize: 256, format: nil) { [unowned self] buffer, when in
             self.analyze(buffer, when: when)
         }
     }
 
-    func remove(from node: AVAudioNode) {
-        node.removeTap(onBus: 0)
+    func remove() {
+        node?.removeTap(onBus: 0)
+        node = nil
     }
 
     private func analyze(_ buffer: AVAudioPCMBuffer, when: AVAudioTime) {
@@ -371,36 +419,46 @@ final class RenderEdgeDetector {
         let base = when.isHostTimeValid ? when.hostTime : mach_absolute_time()
         var found: [UInt64] = []
         var localPeak: Float = 0
+        var localEnergy = 0.0
         for i in 0..<frames {
             var v: Float = 0
             for ch in 0..<channels {
-                v = max(v, abs(data[ch][i]))
+                let x = data[ch][i]
+                v = max(v, abs(x))
+                localEnergy += Double(x * x)
             }
             localPeak = max(localPeak, v)
-            if v > threshold {
-                silentRun = 0
-                if !loud {
-                    loud = true
-                    let offsetNs = UInt64(Double(i) / rate * 1e9)
-                    found.append(base &+ Clock.nanosToTicks(offsetNs))
-                }
-            } else {
-                silentRun += 1
-                if silentRun >= silenceFrames {
-                    loud = false
-                }
+            fast = max(v, fast * fastDecay)
+
+            var ref: Float = 0
+            var k = histIndex           // oldest entry (2 ms ago) is at histIndex
+            for _ in 0..<(win2 - win1) {
+                ref = max(ref, history[k])
+                k += 1
+                if k == win2 { k = 0 }
             }
+            history[histIndex] = fast
+            histIndex += 1
+            if histIndex == win2 { histIndex = 0 }
+
+            if fast > threshold, fast > ratio * ref, frameCounter - lastOnsetFrame > refractoryFrames {
+                lastOnsetFrame = frameCounter
+                let offsetNs = UInt64(Double(i) / rate * 1e9)
+                found.append(base &+ Clock.nanosToTicks(offsetNs))
+            }
+            frameCounter += 1
         }
         lock.lock()
-        edges.append(contentsOf: found)
+        onsets.append(contentsOf: found)
         peakSeen = max(peakSeen, localPeak)
+        energySum += localEnergy / Double(channels)
         lock.unlock()
     }
 
     var snapshot: [UInt64] {
         lock.lock()
         defer { lock.unlock() }
-        return edges
+        return onsets
     }
 
     var peak: Float {
@@ -408,21 +466,42 @@ final class RenderEdgeDetector {
         defer { lock.unlock() }
         return peakSeen
     }
+
+    var energy: Double {
+        lock.lock()
+        defer { lock.unlock() }
+        return energySum
+    }
 }
 
-func runSelftest(count: Int, samplePath: String) -> Int32 {
+struct SelftestOptions {
+    var count: Int
+    var spacingMicros: UInt32
+    var samplePath: String
+    var bufferFrames: UInt32
+    var label: String
+    var jitter: Float = 0.03
+    var verbose = false
+}
+
+func runSelftest(_ opt: SelftestOptions) -> Int32 {
     guard ensureListenPermission() else { return 2 }
     guard ensurePostPermission() else { return 2 }
     guard let keys = SyntheticKeys() else {
         stderrLine("thock: CGEventSource failed")
         return 3
     }
-    guard let audio = makeAudio(samplePath: samplePath) else { return 4 }
+    guard let audio = makeAudio(samplePath: opt.samplePath, bufferFrames: opt.bufferFrames) else { return 4 }
+    guard let click = audio.click else {
+        stderrLine("thock: no click loaded")
+        return 4
+    }
 
-    let detector = RenderEdgeDetector(sampleRate: audio.format.sampleRate)
-    detector.install(on: audio.engine.mainMixerNode)
+    let probe = MixerProbe(sampleRate: audio.format.sampleRate)
+    probe.install(on: audio.engine.mainMixerNode)
 
     let pipeline = Pipeline(audio: audio)
+    pipeline.jitter = opt.jitter
     let collector = EventCollector()
     let drain = Drain(ring: pipeline.logRing) { collector.add($0) }
     do {
@@ -433,70 +512,121 @@ func runSelftest(count: Int, samplePath: String) -> Int32 {
         return 3
     }
     drain.start()
-    usleep(300_000)
+    usleep(500_000)
 
     let device = audio.deviceInfo()
-    stderrLine("selftest: count=\(count) spacing=100ms \(describe(device)) click_frames=\(audio.clickFrames)")
+    stderrLine("selftest: mode=\(opt.label) count=\(opt.count) spacing=\(opt.spacingMicros / 1000)ms "
+        + "\(describe(device)) click_frames=\(audio.clickFrames) voices=\(VoiceMixer.voiceCount)")
 
-    keys.burst(count, spacingMicros: 100_000)
-    collector.waitForKeyDowns(count, timeout: 3)
-    usleep(300_000)
+    keys.burst(opt.count, spacingMicros: opt.spacingMicros)
+    collector.waitForKeyDowns(opt.count, timeout: 3)
+    usleep(400_000)
 
-    detector.remove(from: audio.engine.mainMixerNode)
+    probe.remove()
     pipeline.stop()
     drain.stop()
     audio.stop()
 
+    // Events (trigger thread) and starts (render thread) are both FIFO.
     let downs = collector.snapshot.filter { $0.kind == .keyDown && $0.synthetic != 0 }
-    let scheduled = downs.filter { $0.scheduled != 0 }
+    let scheduled = downs.filter { $0.scheduled != 0 }.sorted { $0.scheduled < $1.scheduled }
+    var starts: [VoiceCommand] = []
+    while let c = audio.mixer.startLog.pop() {
+        starts.append(c)
+    }
+    let onsets = probe.snapshot.sorted()
+
+    var e2rMicros: [Int64] = []       // event -> render cycle that started the voice
+    var queueMicros: [Int64] = []     // command pushed -> render cycle
+    var onsetMicros: [Int64] = []     // event -> onset at the mixer output (external)
+    var agreeMicros: [Int64] = []     // onset - render cycle time
+    for (i, e) in scheduled.enumerated() {
+        let eventNs = Int64(bitPattern: e.timestamp)
+        if i < starts.count {
+            let startNs = Int64(bitPattern: Clock.ticksToNanos(starts[i].started))
+            let issuedNs = Int64(bitPattern: Clock.ticksToNanos(starts[i].issued))
+            e2rMicros.append((startNs - eventNs) / 1000)
+            queueMicros.append((startNs - issuedNs) / 1000)
+            if i < onsets.count {
+                let onsetNs = Int64(bitPattern: Clock.ticksToNanos(onsets[i]))
+                onsetMicros.append((onsetNs - eventNs) / 1000)
+                agreeMicros.append((onsetNs - startNs) / 1000)
+            }
+        }
+        if opt.verbose {
+            let render = i < starts.count ? "\(e2rMicros[i])" : "-"
+            let onset = i < onsets.count && i < starts.count ? "\(onsetMicros[i])" : "-"
+            print("  #\(i) voice=\(e.voice) rate=\(String(format: "%.3f", e.rate)) tap_us=\(Clock.tapMicros(e)) "
+                + "sched_us=\(Clock.schedMicros(e) ?? 0) e2r_us=\(render) onset_us=\(onset)")
+        }
+    }
     let lat = Percentiles(scheduled.compactMap(Clock.latMicros))
     let tap = Percentiles(scheduled.map(Clock.tapMicros))
-    let sched = Percentiles(scheduled.compactMap(Clock.schedMicros))
+    let e2r = Percentiles(e2rMicros)
+    let queue = Percentiles(queueMicros)
+    let onset = Percentiles(onsetMicros)
+    let agree = Percentiles(agreeMicros)
+    let rates = scheduled.map { $0.rate }
 
-    // Match each scheduled click to the first render edge after it.
-    let edges = detector.snapshot.sorted()
-    var renderMicros: [Int64] = []
-    var edgeIndex = 0
-    for e in scheduled.sorted(by: { $0.scheduled < $1.scheduled }) {
-        while edgeIndex < edges.count && edges[edgeIndex] < e.scheduled {
-            edgeIndex += 1
-        }
-        guard edgeIndex < edges.count else { break }
-        let ns = Clock.ticksToNanos(edges[edgeIndex]) - Clock.ticksToNanos(e.scheduled)
-        renderMicros.append(Int64(ns / 1000))
-        edgeIndex += 1
-    }
-    let render = Percentiles(renderMicros)
+    let voicesStarted = Int(audio.mixer.voicesStarted)
     let dropped = pipeline.tapRing.droppedCount + pipeline.logRing.droppedCount
+    let commandsDropped = audio.mixer.commandsDropped
+    let overloads = audio.overloadCount
+    let clickEnergy = energy(of: click)
+    let energyRatio = clickEnergy > 0 ? probe.energy / clickEnergy : 0
+    let rateMin = String(format: "%.3f", rates.min() ?? 1)
+    let rateMax = String(format: "%.3f", rates.max() ?? 1)
+    let tag = "selftest[\(opt.label)]"
 
-    print("selftest: keyDowns=\(downs.count)/\(count) scheduled=\(scheduled.count)/\(count) "
-        + "rendered=\(edges.count)/\(count) dropped=\(dropped) reenabled=\(pipeline.tap.reenableCount) "
-        + "mixer_peak=\(String(format: "%.3f", detector.peak))")
-    print("selftest: lat_us   \(lat.description)   (event -> scheduleBuffer)")
-    print("selftest: tap_us   \(tap.description)   (event -> tap callback)")
-    print("selftest: sched_us \(sched.description)   (tap callback -> scheduleBuffer)")
-    print("selftest: render_us \(render.description) n=\(render.count)   (scheduleBuffer -> mixer output, informational)")
+    print("\(tag): keyDowns=\(downs.count)/\(opt.count) scheduled=\(scheduled.count)/\(opt.count) "
+        + "voices_started=\(voicesStarted)/\(opt.count) onsets=\(onsets.count)/\(opt.count) "
+        + "energy_ratio=\(String(format: "%.2f", energyRatio)) (expected \(opt.count)) "
+        + "mixer_peak=\(String(format: "%.3f", probe.peak))")
+    print("\(tag): overloads=\(overloads) dropped=\(dropped) commands_dropped=\(commandsDropped) "
+        + "reenabled=\(pipeline.tap.reenableCount) (\(pipeline.tap.disableReasons)) "
+        + "io_frames=\(device.bufferFrames)/\(device.bufferFramesRequested) rate=\(rateMin)..\(rateMax)")
+    print("\(tag): e2r_us     \(e2r.description)   (event -> render cycle that started the voice)")
+    print("\(tag): onset_us   \(onset.description)   (event -> onset at mixer output, n=\(onset.count))")
+    print("\(tag): agree_us   \(agree.description)   (onset - render cycle; should be ~0..+1 buffer)")
+    print("\(tag): lat_us     \(lat.description)   (event -> command queued)")
+    print("\(tag): tap_us     \(tap.description)   (event -> tap callback)")
+    print("\(tag): queue_us   \(queue.description)   (command queued -> render cycle)")
 
     var failures: [String] = []
-    if scheduled.count != count {
-        failures.append("scheduled \(scheduled.count) of \(count) keyDowns")
+    if scheduled.count != opt.count {
+        failures.append("scheduled \(scheduled.count) of \(opt.count) keyDowns")
+    }
+    if voicesStarted != opt.count {
+        failures.append("render block started \(voicesStarted) voices, expected \(opt.count)")
+    }
+    if opt.spacingMicros >= 60_000 && onsets.count != opt.count {
+        failures.append("onsets \(onsets.count), expected \(opt.count)")
+    }
+    if abs(energyRatio - Double(opt.count)) > 0.1 * Double(opt.count) {
+        failures.append("mixer energy = \(String(format: "%.2f", energyRatio)) clicks, expected \(opt.count) ±10%")
+    }
+    if overloads != 0 {
+        failures.append("\(overloads) HAL processor overloads")
+    }
+    if dropped != 0 || commandsDropped != 0 {
+        failures.append("dropped events=\(dropped) commands=\(commandsDropped)")
     }
     if lat.median >= 5_000 {
         failures.append("lat_us median \(lat.median) >= 5000")
     }
-    if edges.count != count {
-        failures.append("rendered \(edges.count) clicks, expected \(count)")
+    if e2r.p95 >= 8_000 {
+        failures.append("e2r_us p95 \(e2r.p95) >= 8000")
     }
-    if dropped != 0 {
-        failures.append("ring dropped \(dropped) events")
+    if device.bufferFrames != device.bufferFramesRequested {
+        failures.append("io_frames \(device.bufferFrames) != requested \(device.bufferFramesRequested)")
     }
 
     if failures.isEmpty {
-        print("selftest: PASS")
+        print("\(tag): PASS")
         return 0
     }
     for f in failures {
-        print("selftest: FAIL — \(f)")
+        print("\(tag): FAIL — \(f)")
     }
     return 1
 }

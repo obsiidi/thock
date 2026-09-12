@@ -22,6 +22,10 @@ struct KeyEvent {
     var seq: UInt64 = 0
     /// mach_absolute_time() right after scheduleBuffer returned; 0 = not scheduled.
     var scheduled: UInt64 = 0
+    /// Voice-pool slot that played this event.
+    var voice: UInt8 = 0
+    /// Playback rate applied to that voice (pitch jitter).
+    var rate: Float = 1
 }
 
 /// Single-producer / single-consumer ring buffer with fixed capacity.

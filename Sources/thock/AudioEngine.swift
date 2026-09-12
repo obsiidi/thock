@@ -1,8 +1,14 @@
 import AVFoundation
 import CoreAudio
+import CAtomics
 
-/// AVAudioEngine wrapper. Phase 1: one player node, one pre-decoded click.
-/// Phase 2 replaces the single node with a round-robin voice pool.
+/// AVAudioEngine wrapper:
+///
+///   VoiceMixer (AVAudioSourceNode, 16 voices) ─► mainMixer ─► output
+///
+/// Samples are decoded into the hardware format once at load. The IO buffer
+/// size is requested from the HAL before start; overloads are counted via
+/// the device's processor-overload notification.
 final class AudioEngine {
     enum Failure: Error {
         case noOutputFormat
@@ -15,32 +21,59 @@ final class AudioEngine {
         var sampleRate: Double
         var channels: UInt32
         var bufferFrames: UInt32
+        var bufferFramesRequested: UInt32
         var presentationLatencyMs: Double
     }
 
     let engine = AVAudioEngine()
-    let player = AVAudioPlayerNode()
-    /// Format every sample is decoded into: the main mixer's output format
-    /// (hardware sample rate, float32, non-interleaved).
+    let mixer: VoiceMixer
+    /// Hardware sample rate, float32, non-interleaved, stereo. Matches the
+    /// mixer so nothing resamples at playback time.
     let format: AVAudioFormat
-    private var click: AVAudioPCMBuffer?
+    let requestedBufferFrames: UInt32
+
+    private(set) var click: AVAudioPCMBuffer?
+    private var clickIndex: Int32 = -1
+    private var deviceID: AudioDeviceID = 0
+    private let overloads: UnsafeMutablePointer<UInt64>
+    private let overloadQueue = DispatchQueue(label: "thock.overload")
+    private var overloadBlock: AudioObjectPropertyListenerBlock?
+    private var overloadDevice: AudioDeviceID = 0
     private var configObserver: NSObjectProtocol?
 
-    init() throws {
-        // Touching mainMixerNode wires mixer -> output for the current device.
-        let mixerFormat = engine.mainMixerNode.outputFormat(forBus: 0)
-        guard mixerFormat.channelCount > 0, mixerFormat.sampleRate > 0 else {
+    init(bufferFrames: UInt32) throws {
+        requestedBufferFrames = bufferFrames
+        // The hardware format. Do not use mainMixerNode.outputFormat here:
+        // before prepare() it reports a 44.1 kHz default regardless of the
+        // device, and decoding into that makes the mixer resample at runtime.
+        let hardware = engine.outputNode.outputFormat(forBus: 0)
+        guard hardware.channelCount > 0, hardware.sampleRate > 0,
+              let engineFormat = AVAudioFormat(
+                standardFormatWithSampleRate: hardware.sampleRate,
+                channels: min(hardware.channelCount, 2)
+              ) else {
             throw Failure.noOutputFormat
         }
-        format = mixerFormat
-        engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
+        format = engineFormat
+        mixer = VoiceMixer(format: engineFormat)
+        engine.attach(mixer.node)
+        engine.connect(mixer.node, to: engine.mainMixerNode, format: engineFormat)
+
+        overloads = .allocate(capacity: 1)
+        overloads.initialize(to: 0)
     }
 
     deinit {
+        removeOverloadListener()
         if let o = configObserver {
             NotificationCenter.default.removeObserver(o)
         }
+        overloads.deallocate()
+    }
+
+    /// Times the HAL reported an IO cycle overrun on the output device.
+    var overloadCount: UInt64 {
+        catomic_load_acquire(overloads)
     }
 
     func loadClick(url: URL) throws {
@@ -50,7 +83,9 @@ final class AudioEngine {
             throw Failure.bufferAllocation
         }
         try file.read(into: raw)
-        click = try SampleConverter.convert(raw, to: format)
+        let decoded = try SampleConverter.convert(raw, to: format)
+        click = decoded
+        clickIndex = mixer.register(decoded)
     }
 
     var clickFrames: AVAudioFrameCount {
@@ -59,8 +94,10 @@ final class AudioEngine {
 
     func start() throws {
         engine.prepare()
+        deviceID = currentOutputDevice() ?? AudioEngine.defaultOutputDevice() ?? 0
+        applyBufferFrames()
         try engine.start()
-        player.play()
+        installOverloadListener()
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: nil
         ) { [weak self] _ in
@@ -69,67 +106,147 @@ final class AudioEngine {
     }
 
     func stop() {
-        player.stop()
+        removeOverloadListener()
         engine.stop()
     }
 
-    /// Called from the trigger thread. `.interrupts` restarts the click
-    /// instead of queueing it behind the one still playing.
+    /// Trigger thread only. Queues the click for the next render cycle.
     @inline(__always)
-    func trigger() {
-        guard let click = click else { return }
-        player.scheduleBuffer(click, at: nil, options: .interrupts, completionHandler: nil)
+    func trigger(rate: Float) -> Bool {
+        mixer.trigger(sample: clickIndex, rate: rate)
     }
 
     /// The engine stops itself when the output device changes (headphones
-    /// plugged in, etc.). Bring it back; the mixer resamples if the new
-    /// device runs at another rate.
+    /// plugged in, etc.). Re-apply the buffer size on the new device and
+    /// bring it back; the mixer resamples if the rate changed.
     private func restartAfterConfigurationChange() {
+        removeOverloadListener()
+        engine.prepare()
+        deviceID = currentOutputDevice() ?? AudioEngine.defaultOutputDevice() ?? 0
+        applyBufferFrames()
         do {
             try engine.start()
-            player.play()
+            installOverloadListener()
         } catch {
             stderrLine("thock: audio restart after device change failed: \(error)")
         }
     }
 
-    func deviceInfo() -> DeviceInfo {
-        var info = DeviceInfo(
-            name: "?",
-            sampleRate: format.sampleRate,
-            channels: format.channelCount,
-            bufferFrames: 0,
-            presentationLatencyMs: engine.outputNode.presentationLatency * 1000
-        )
-        guard let au = engine.outputNode.audioUnit else { return info }
+    // MARK: CoreAudio HAL
 
-        var deviceID = AudioDeviceID(0)
+    private static func defaultOutputDevice() -> AudioDeviceID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        let status = AudioObjectGetPropertyData(
+            AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id
+        )
+        return (status == noErr && id != 0) ? id : nil
+    }
+
+    private func currentOutputDevice() -> AudioDeviceID? {
+        guard let au = engine.outputNode.audioUnit else { return nil }
+        var id = AudioDeviceID(0)
         var size = UInt32(MemoryLayout<AudioDeviceID>.size)
         let status = AudioUnitGetProperty(
-            au, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &deviceID, &size
+            au, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &id, &size
         )
-        guard status == noErr, deviceID != 0 else { return info }
+        return (status == noErr && id != 0) ? id : nil
+    }
 
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyBufferFrameSize,
+    private func outputAddress(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+        AudioObjectPropertyAddress(
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeOutput,
             mElement: kAudioObjectPropertyElementMain
         )
-        var frames: UInt32 = 0
-        size = UInt32(MemoryLayout<UInt32>.size)
-        if AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &frames) == noErr {
-            info.bufferFrames = frames
-        }
+    }
 
-        address.mSelector = kAudioObjectPropertyName
-        address.mScope = kAudioObjectPropertyScopeGlobal
-        var nameRef: Unmanaged<CFString>?
-        size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
-        if AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &nameRef) == noErr,
-           let name = nameRef?.takeRetainedValue() {
-            info.name = name as String
+    /// Clamps the requested IO buffer size to the device's range and sets
+    /// it. This is a HAL client property: it affects this process's IO cycle
+    /// only and is not persisted.
+    private func applyBufferFrames() {
+        guard deviceID != 0 else { return }
+        var address = outputAddress(kAudioDevicePropertyBufferFrameSizeRange)
+        var range = AudioValueRange()
+        var size = UInt32(MemoryLayout<AudioValueRange>.size)
+        var frames = requestedBufferFrames
+        if AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &range) == noErr {
+            frames = max(UInt32(range.mMinimum), min(UInt32(range.mMaximum), frames))
         }
-        return info
+        address = outputAddress(kAudioDevicePropertyBufferFrameSize)
+        size = UInt32(MemoryLayout<UInt32>.size)
+        let status = AudioObjectSetPropertyData(deviceID, &address, 0, nil, size, &frames)
+        if status != noErr {
+            stderrLine("thock: could not set IO buffer size to \(frames) (OSStatus \(status))")
+        }
+    }
+
+    private func readBufferFrames() -> UInt32 {
+        guard deviceID != 0 else { return 0 }
+        var address = outputAddress(kAudioDevicePropertyBufferFrameSize)
+        var frames: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &frames) == noErr else { return 0 }
+        return frames
+    }
+
+    private func deviceName() -> String {
+        guard deviceID != 0 else { return "?" }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioObjectPropertyName,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var nameRef: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &nameRef) == noErr,
+              let name = nameRef?.takeRetainedValue() else { return "?" }
+        return name as String
+    }
+
+    private func installOverloadListener() {
+        guard deviceID != 0, overloadBlock == nil else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDeviceProcessorOverload,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        let counter = overloads
+        let block: AudioObjectPropertyListenerBlock = { _, _ in
+            catomic_store_release(counter, catomic_load_relaxed(counter) &+ 1)
+        }
+        if AudioObjectAddPropertyListenerBlock(deviceID, &address, overloadQueue, block) == noErr {
+            overloadBlock = block
+            overloadDevice = deviceID
+        }
+    }
+
+    private func removeOverloadListener() {
+        guard let block = overloadBlock, overloadDevice != 0 else { return }
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDeviceProcessorOverload,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectRemovePropertyListenerBlock(overloadDevice, &address, overloadQueue, block)
+        overloadBlock = nil
+        overloadDevice = 0
+    }
+
+    func deviceInfo() -> DeviceInfo {
+        DeviceInfo(
+            name: deviceName(),
+            sampleRate: format.sampleRate,
+            channels: format.channelCount,
+            bufferFrames: readBufferFrames(),
+            bufferFramesRequested: requestedBufferFrames,
+            presentationLatencyMs: engine.outputNode.presentationLatency * 1000
+        )
     }
 }
 

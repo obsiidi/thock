@@ -39,7 +39,11 @@ Zertifikate aus der Schlüsselbundverwaltung.
 ```
 Sources/thock/
   KeyTap.swift          CGEventTap, Tastenerfassung
-  AudioEngine.swift     AVAudioEngine, Voice-Pool, Wiedergabe
+  EventRing.swift       SPSC-Ring Tap → Trigger → Log
+  Pipeline.swift        Trigger-Thread: Tap-Events → Audio, Pitch-Jitter
+  AudioEngine.swift     AVAudioEngine, Geräte-/Puffer-Setup, Overload-Zähler
+  VoiceMixer.swift      AVAudioSourceNode, 16 Voices, Sample-Tabelle (Phase 2:
+                        ersetzt den AVAudioPlayerNode-Pool, siehe PROGRESS.md)
   SoundpackLoader.swift Mechvibes-config.json parsen, Buffer schneiden
   Scancodes.swift       CGKeyCode ↔ Windows-Scancode Mapping
   Motion.swift          SPU-Accelerometer (Phase 5, optional)

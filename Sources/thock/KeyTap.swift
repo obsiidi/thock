@@ -22,6 +22,8 @@ final class KeyTap {
     fileprivate var port: CFMachPort?
     fileprivate let seq: UnsafeMutablePointer<UInt64>
     fileprivate let reenables: UnsafeMutablePointer<UInt64>
+    fileprivate let timeouts: UnsafeMutablePointer<UInt64>
+    fileprivate let userInputs: UnsafeMutablePointer<UInt64>
 
     private var runLoop: CFRunLoop?
     private var thread: Thread?
@@ -34,16 +36,27 @@ final class KeyTap {
         seq.initialize(to: 0)
         reenables = .allocate(capacity: 1)
         reenables.initialize(to: 0)
+        timeouts = .allocate(capacity: 1)
+        timeouts.initialize(to: 0)
+        userInputs = .allocate(capacity: 1)
+        userInputs.initialize(to: 0)
     }
 
     deinit {
         seq.deallocate()
         reenables.deallocate()
+        timeouts.deallocate()
+        userInputs.deallocate()
     }
 
     /// Times the tap was found disabled and switched back on.
     var reenableCount: UInt64 {
         catomic_load_acquire(reenables)
+    }
+
+    /// Breakdown of the disable reasons delivered to the callback.
+    var disableReasons: String {
+        "timeout=\(catomic_load_acquire(timeouts)) userInput=\(catomic_load_acquire(userInputs))"
     }
 
     /// Events seen by the callback (including ones dropped by the ring).
@@ -147,6 +160,8 @@ private func keyTapCallback(
         if let port = tap.port {
             CGEvent.tapEnable(tap: port, enable: true)
         }
+        let reason = type == .tapDisabledByTimeout ? tap.timeouts : tap.userInputs
+        catomic_store_release(reason, catomic_load_relaxed(reason) &+ 1)
         tap.bumpReenables()
         return Unmanaged.passUnretained(event)
     default:
