@@ -10,21 +10,25 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 enum Mode {
     case help
+    case app
     case run
     case diag
     case selftest
     case selftestTap
     case listPacks
     case map
+    case autostart
 }
 
-var mode: Mode = .run
+var mode: Mode = .app
 var printAll = false
+var verbose = false
+var autostartArg = "status"
 var count: Int?
 var burst: Int?
 var idleSeconds = 60.0
-var clickPath = "Samples/click.wav"
-var packsDir = "packs"
+var clickPath = Resources.clickURL.path
+var packsDir = Resources.packsRoot.path
 var packName: String?
 let defaultPack = "topre-purple-hybrid-pbt"
 var ioFrames: UInt32 = 128
@@ -36,6 +40,10 @@ while !args.isEmpty {
     switch a {
     case "--help", "-h":
         mode = .help
+    case "--headless":
+        mode = .run
+    case "--verbose":
+        verbose = true
     case "--diag":
         mode = .diag
     case "--all":
@@ -102,6 +110,14 @@ while !args.isEmpty {
         }
         args.removeFirst()
         packsDir = v
+    case "--autostart":
+        guard let v = args.first, ["on", "off", "status"].contains(v) else {
+            stderrLine("thock: --autostart needs on|off|status")
+            exit(64)
+        }
+        args.removeFirst()
+        autostartArg = v
+        mode = .autostart
     case "--list-packs":
         mode = .listPacks
     case "--map":
@@ -143,7 +159,9 @@ case .help:
     print("""
     usage: thock [options]
 
-      (no mode)             play the pack's sounds on every key until Ctrl-C
+      (no mode)             menu bar app (status item + popover)
+        --verbose           log every key event to stdout while the app runs
+      --headless            no UI: play the pack's sounds on every key until Ctrl-C
       --diag                same, plus one log line per keyDown
         --all               also log keyUp and modifier (flagsChanged) events
       --selftest            post synthetic keystrokes 100 ms apart, measure
@@ -160,13 +178,19 @@ case .help:
       --click PATH          built-in click WAV (default Samples/click.wav)
       --io-frames N         requested IO buffer size in frames (default 128)
       --jitter F            pitch jitter as a fraction of rate (default 0.03)
+      --autostart on|off|status
+                            login item via SMAppService (run from inside thock.app)
       --help                show this help
     """)
     exit(0)
+case .app:
+    runApp(verbose: verbose, bufferFrames: ioFrames)
 case .run:
     exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: nil))
 case .diag:
     exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: printAll ? .all : .keyDown))
+case .autostart:
+    exit(runAutostart(autostartArg))
 case .listPacks:
     exit(runListPacks(root: URL(fileURLWithPath: packsDir), bufferFrames: ioFrames))
 case .map:

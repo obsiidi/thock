@@ -47,8 +47,14 @@ Sources/thock/
   SoundpackLoader.swift Mechvibes-config.json parsen, Buffer schneiden
   Scancodes.swift       CGKeyCode ↔ Windows-Scancode Mapping
   Motion.swift          SPU-Accelerometer (Phase 5, optional)
-  StatusBar.swift       NSStatusItem, Einstellungen (Phase 4)
+  App.swift             NSStatusItem + NSPopover, App-Lifecycle (Phase 4)
+  AppState.swift        Popover-Modell: Pack-Wechsel, Lautstärke, Autostart
+  PopoverView.swift     SwiftUI-Inhalt des Popovers
+  Resources.swift       Packs/Klick aus Bundle oder cwd
   Diagnostics.swift     --diag / --selftest
+Tools/
+  bundle.sh             dist/thock.app bauen und signieren (thock-dev)
+  make-cert.sh          selbstsigniertes Codesign-Zertifikat anlegen
 ```
 
 ---

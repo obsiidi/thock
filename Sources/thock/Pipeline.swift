@@ -19,6 +19,12 @@ final class Pipeline {
     var clickOnRepeat = false
     /// Pitch jitter: rate = 1 ± jitter.
     var jitter: Float = 0.03
+    private let keyUpFlag: UnsafeMutablePointer<UInt64>
+    /// Whether key-release sounds play (packs with "-up" defines / soundup).
+    var keyUpSounds: Bool {
+        get { catomic_load_acquire(keyUpFlag) != 0 }
+        set { catomic_store_release(keyUpFlag, newValue ? 1 : 0) }
+    }
 
     private var thread: Thread?
     private let stopFlag: UnsafeMutablePointer<UInt64>
@@ -42,6 +48,8 @@ final class Pipeline {
         for k in 0..<128 { scan[k] = Scancodes.table[k] }
         modState = .allocate(capacity: 128)
         modState.initialize(repeating: 0, count: 128)
+        keyUpFlag = .allocate(capacity: 1)
+        keyUpFlag.initialize(to: 1)
     }
 
     deinit {
@@ -49,6 +57,7 @@ final class Pipeline {
         triggered.deallocate()
         scan.deallocate()
         modState.deallocate()
+        keyUpFlag.deallocate()
     }
 
     /// Number of sounds handed to the audio engine.
@@ -135,6 +144,9 @@ final class Pipeline {
                 case .flagsChanged:
                     e.pressed = modifierPressed(e)
                     play = true
+                }
+                if play, e.pressed == 0, catomic_load_acquire(keyUpFlag) == 0 {
+                    play = false
                 }
                 if play, let pack = pack {
                     let sample = e.pressed == 1 ? pack.keyDown[k] : pack.keyUp[k]

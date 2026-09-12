@@ -151,17 +151,58 @@ PASS, e2r p95 6,2–6,4 ms, 0 Overloads. `--map topre`: Buchstaben 26
 verschiedene Slices, Space #56, Enter #39, Backspace #15. holy-pandas:
 Shift → GENERIC_R3, Release → release/GENERIC (per `--diag --all` belegt).
 
+## Phase 4 — Menüleisten-App ✅
+Abgenommen am 2026-09-12.
+
+- **Bundle ohne Xcode:** `Tools/bundle.sh` → `swift build -c release`,
+  `dist/thock.app` (Info.plist aus `Tools/`, `LSUIElement`, Packs + Klick in
+  `Resources/`), `codesign`. `dist/` ist gitignored.
+- **Signatur:** selbstsigniertes Zertifikat `thock-dev` im Login-Schlüsselbund,
+  per `Tools/make-cert.sh` angelegt (openssl + `security import` +
+  `add-trusted-cert`, kostenlos). Designated Requirement =
+  `identifier "com.mauriceberthold.thock" and certificate leaf = H"d5cd…"` —
+  Rebuild-stabil, **bewiesen**: nach Rebuild + Relaunch sofort `running`.
+- **TCC-Falle, erlebt:** Ein Eintrag aus der Ad-hoc-Zeit blockiert die signierte
+  App still (gemerkter cdhash passt nicht, Schalter an/aus hilft nicht). Lösung:
+  `tccutil reset ListenEvent com.mauriceberthold.thock`, App neu starten,
+  einmal freigeben. Beim Umschalten in den Systemeinstellungen relauncht macOS
+  die App („Beenden und erneut öffnen") — dann ohne Log-Umleitung.
+- `App.swift`: `NSStatusItem` (SF-Symbol `keyboard`), `NSPopover .transient`
+  mit `NSHostingController`, SIGTERM/SIGINT → sauberes Stoppen mit Summary,
+  Single-Instance-Guard. `--autostart on|off|status` als CLI.
+- `AppState.swift`: Pack-Liste, Pack-Wechsel (Teardown → neue Engine+Pipeline,
+  serialisiert auf eigener Queue), Lautstärke = `mainMixerNode.outputVolume`,
+  Loslass-Geräusche-Schalter (atomares Flag im Trigger-Thread), Autostart via
+  `SMAppService.mainApp`, Freigabe-Polling alle 2 s. Persistenz in
+  `UserDefaults` (`pack`, `volume`, `keyup`).
+- `PopoverView.swift`: Dropdown (Pack-Namen aus config.json), Slider,
+  Schalter Loslass-Geräusche (ausgegraut, wenn das Pack keine hat), Autostart,
+  Statuszeile mit Knopf „Systemeinstellungen öffnen", Beenden.
+- `Resources.swift`: Packs/Klick aus dem Bundle oder aus dem cwd (CLI).
+- `main.swift`: ohne Argumente GUI, `--headless` alter CLI-Loop, `--verbose`
+  loggt in der GUI jeden Anschlag.
+
+Abnahme-Belege:
+- `lsappinfo`: `type="UIElement"` — kein Dock-Icon.
+- `open --stderr LOG dist/thock.app --args --verbose` + 5 synthetische
+  F20-Events → 5× `kd … sample=…` durch die App-Pipeline; Summary bei SIGTERM.
+- Sieben Pack-Wechsel per Dropdown im Log, Defaults gespeichert
+  (`pack=holy-pandas volume=0.49 keyup=0`).
+- `--autostart status` → `enabled` nach Umlegen des Schalters im Popover.
+- Loslass-Schalter: an → `ku … sample=11`, aus → `ku … sample=-`.
+- Neustart-Beweis (App läuft nach Login) steht beim Entwickler aus.
+
 ## Offene Punkte
-- `tapDisabledByUserInput` tritt sporadisch auf (1× in ~20 Läufen), Re-Enable
-  greift, kein Event verloren. Ursache unklar.
-- Pack-Wechsel zur Laufzeit: Sample-Tabelle nur vor `engine.start()` befüllbar
-  → Phase 4 stoppt die Engine, lädt neu, startet (kurze Pause, akzeptabel).
-- 64 Frames laufen sauber (p95 3,7 ms); Default bleibt 128.
+- Entwickler hört bei holy-pandas/cherrymx-black die Release-Sounds als
+  „Standard-Klicken"; Schalter jetzt aus (`keyup=0`). Physische Tastatur
+  klappert natürlich weiterhin.
 - Gerätewechsel mit anderer Rate: Mixer resampelt; Neu-Dekodieren steht aus.
-- Mechvibes-Codes 60999–61011 (Medientasten?) sind nicht gemappt.
+- `tapDisabledByUserInput` sporadisch, Re-Enable greift.
+- App liegt unter `dist/thock.app` im Projekt; Autostart zeigt auf diesen Pfad.
+  Verschieben nach ~/Applications = Autostart neu setzen (TCC bleibt, da
+  Zertifikat-basiert).
 
 ## Nächster Schritt
-Phase 4 — Menüleisten-App: .app-Bundle, `NSStatusItem`, `LSUIElement`,
-SwiftUI-Popover mit Lautstärke und **Pack-Dropdown** (Wunsch des Entwicklers),
-Autostart `SMAppService`, selbstsigniertes Zertifikat, damit die Freigabe
-Rebuilds überlebt.
+Phase 5 — Anschlagstärke: erst `ioreg -l -w0 | grep -c AppleSPUHIDDevice`
+ausführen; > 0 → SPU-Accelerometer-Variante, sonst Schätzung aus Intervall +
+Haltedauer.
