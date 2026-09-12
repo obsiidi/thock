@@ -14,6 +14,8 @@ enum Mode {
     case diag
     case selftest
     case selftestTap
+    case listPacks
+    case map
 }
 
 var mode: Mode = .run
@@ -21,7 +23,10 @@ var printAll = false
 var count: Int?
 var burst: Int?
 var idleSeconds = 60.0
-var samplePath = "Samples/click.wav"
+var clickPath = "Samples/click.wav"
+var packsDir = "packs"
+var packName: String?
+let defaultPack = "topre-purple-hybrid-pbt"
 var ioFrames: UInt32 = 128
 var jitter: Float = 0.03
 
@@ -75,17 +80,62 @@ while !args.isEmpty {
         }
         args.removeFirst()
         idleSeconds = s
-    case "--sample":
+    case "--click":
         guard let v = args.first else {
-            stderrLine("thock: --sample needs a path")
+            stderrLine("thock: --click needs a path")
             exit(64)
         }
         args.removeFirst()
-        samplePath = v
+        clickPath = v
+        packName = "click"
+    case "--pack":
+        guard let v = args.first else {
+            stderrLine("thock: --pack needs a name or path")
+            exit(64)
+        }
+        args.removeFirst()
+        packName = v
+    case "--packs-dir":
+        guard let v = args.first else {
+            stderrLine("thock: --packs-dir needs a path")
+            exit(64)
+        }
+        args.removeFirst()
+        packsDir = v
+    case "--list-packs":
+        mode = .listPacks
+    case "--map":
+        mode = .map
     default:
         stderrLine("thock: unknown argument \(a)")
         exit(64)
     }
+}
+
+/// Resolves --pack: "click" = built-in, a path with "/" or an existing
+/// directory = that directory, otherwise a folder name under --packs-dir.
+/// Without --pack: the default pack if present, else the built-in click.
+func resolvePack() -> PackSelection {
+    let fm = FileManager.default
+    let root = URL(fileURLWithPath: packsDir)
+    if let name = packName {
+        if name == "click" { return .builtIn(clickPath: clickPath) }
+        if fm.fileExists(atPath: URL(fileURLWithPath: name).appendingPathComponent("config.json").path) {
+            return .directory(URL(fileURLWithPath: name))
+        }
+        let candidate = root.appendingPathComponent(name)
+        if fm.fileExists(atPath: candidate.appendingPathComponent("config.json").path) {
+            return .directory(candidate)
+        }
+        stderrLine("thock: pack \"\(name)\" not found (looked in \(root.path)); see --list-packs")
+        exit(64)
+    }
+    let candidate = root.appendingPathComponent(defaultPack)
+    if fm.fileExists(atPath: candidate.appendingPathComponent("config.json").path) {
+        return .directory(candidate)
+    }
+    stderrLine("thock: default pack \(defaultPack) not found, using built-in click")
+    return .builtIn(clickPath: clickPath)
 }
 
 switch mode {
@@ -93,9 +143,9 @@ case .help:
     print("""
     usage: thock [options]
 
-      (no mode)             play a click on every keyDown until Ctrl-C
+      (no mode)             play the pack's sounds on every key until Ctrl-C
       --diag                same, plus one log line per keyDown
-        --all               also log keyUp and flagsChanged
+        --all               also log keyUp and modifier (flagsChanged) events
       --selftest            post synthetic keystrokes 100 ms apart, measure
                             latency and prove render per voice; exit 0/1
         --count N           keystrokes (default 50)
@@ -103,24 +153,32 @@ case .help:
       --selftest-tap        capture-only self-test, no audio; exit 0/1
         --count N           keystrokes per burst (default 20)
         --idle S            seconds between the two bursts (default 60)
-      --sample PATH         click WAV (default Samples/click.wav)
+      --list-packs          list packs under --packs-dir (default packs/)
+      --map                 print key -> scancode -> sample table for the pack
+      --pack NAME|PATH      pack to use (default \(defaultPack)); "click" = built-in
+      --packs-dir DIR       where packs live (default packs)
+      --click PATH          built-in click WAV (default Samples/click.wav)
       --io-frames N         requested IO buffer size in frames (default 128)
       --jitter F            pitch jitter as a fraction of rate (default 0.03)
       --help                show this help
     """)
     exit(0)
 case .run:
-    exit(runMain(samplePath: samplePath, bufferFrames: ioFrames, jitter: jitter, log: nil))
+    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: nil))
 case .diag:
-    exit(runMain(samplePath: samplePath, bufferFrames: ioFrames, jitter: jitter, log: printAll ? .all : .keyDown))
+    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: printAll ? .all : .keyDown))
+case .listPacks:
+    exit(runListPacks(root: URL(fileURLWithPath: packsDir), bufferFrames: ioFrames))
+case .map:
+    exit(runMap(resolvePack(), bufferFrames: ioFrames))
 case .selftest:
     if let n = burst {
         exit(runSelftest(SelftestOptions(
-            count: n, spacingMicros: 10_000, samplePath: samplePath, bufferFrames: ioFrames, label: "burst",
+            count: n, spacingMicros: 10_000, selection: resolvePack(), bufferFrames: ioFrames, label: "burst",
             jitter: jitter, verbose: printAll)))
     }
     exit(runSelftest(SelftestOptions(
-        count: count ?? 50, spacingMicros: 100_000, samplePath: samplePath, bufferFrames: ioFrames, label: "spaced",
+        count: count ?? 50, spacingMicros: 100_000, selection: resolvePack(), bufferFrames: ioFrames, label: "spaced",
         jitter: jitter, verbose: printAll)))
 case .selftestTap:
     exit(runTapSelftest(count: count ?? 20, idleSeconds: idleSeconds))

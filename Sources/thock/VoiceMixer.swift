@@ -139,6 +139,11 @@ final class VoiceMixer {
     var commandsDropped: UInt64 { catomic_load_acquire(droppedCommands) }
     var sampleCount: Int { buffers.count }
 
+    /// Decoded buffer for a sample index (diagnostics; not for the render thread).
+    func buffer(at index: Int32) -> AVAudioPCMBuffer? {
+        index >= 0 && Int(index) < buffers.count ? buffers[Int(index)] : nil
+    }
+
     /// Registers a decoded buffer (must be in the mixer's format, float32
     /// non-interleaved). Call before the engine starts. Returns the index.
     func register(_ buffer: AVAudioPCMBuffer) -> Int32 {

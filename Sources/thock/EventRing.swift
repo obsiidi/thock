@@ -26,6 +26,12 @@ struct KeyEvent {
     var voice: UInt8 = 0
     /// Playback rate applied to that voice (pitch jitter).
     var rate: Float = 1
+    /// 1 = key went down (incl. modifier press), 0 = key went up.
+    var pressed: UInt8 = 0
+    /// Mechvibes key code from the scancode table, -1 if unmapped.
+    var scan: Int32 = -1
+    /// Sample index that was triggered, -1 if nothing was played.
+    var sample: Int32 = -1
 }
 
 /// Single-producer / single-consumer ring buffer with fixed capacity.

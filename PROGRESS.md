@@ -115,20 +115,53 @@ io 512:     e2r_us median=17634 p95=21477  (Vergleich)
 ```
 Energie liegt ~5 % unter N: lineare Interpolation dämpft bei 3 kHz leicht.
 
+## Phase 3 — Sound-Packs ✅
+Abgenommen am 2026-09-12.
+
+- **Sounds:** sieben echte Aufnahmen aus dem Mechvibes-Repo
+  (`hainguyents13/mechvibes`, MIT), mit Freigabe des Entwicklers geladen und
+  unter `packs/` committet (~12 MB): cherrymx-{blue,brown,red,black}-abs,
+  topre-purple-hybrid-pbt (Default), holy-pandas (v2, mit Key-up-Sounds),
+  nk-cream (multi-wav).
+- **OGG:** `AVAudioFile` dekodiert Vorbis auf diesem macOS (26.6) nativ —
+  identisch zu ffmpeg (Peak −9,14 dB, RMS −43,75 dB gegengeprüft). Keine
+  Konvertierung nötig. Fallback im Loader: schlägt `.ogg` fehl, wird eine
+  gleichnamige `.wav/.flac/.m4a/.mp3` gesucht (ältere macOS).
+- `Scancodes.swift`: CGKeyCode → libuiohook-Code (Windows-Set-1-Scancode mit
+  0x0E-/0xE0-Präfix), 128er-Array, plus Reihen-Tabelle (v2 `GENERIC_R{0-4}`)
+  und Namen. ISO-Taste (kc 10) → 86, `^` (kc 50) → 41. Fn/Medientasten → −1.
+- `SoundpackLoader.swift`: config.json tolerant (Slice-Array, Datei, null,
+  `"NN-up"`, `soundup`, `{0-4}`-Muster). Single: Datei einmal dekodieren,
+  Slices mit 0,5/2 ms Fades kopieren, gleiche Slices dedupliziert. Pack global
+  auf −6 dBFS Peak normalisiert. Undefinierte Tasten → Reihen-Generic, sonst
+  häufigstes Sample. Sample-Reihenfolge deterministisch (sortierte Codes).
+- `Pipeline.swift`: Modifier aus `flagsChanged` (Flag-Bit + Zustand pro Taste,
+  CapsLock über Bit-Wechsel), Key-up-Sounds, Lookup über zwei feste
+  128er-Tabellen — kein Hashing im Trigger-Thread.
+- CLI: `--list-packs [--packs-dir]`, `--pack NAME|PFAD|click`, `--map`,
+  `--diag` mit `key= scan= down= sample=`.
+- Selftest: Energie-Erwartung berücksichtigt Voice-Stealing (Slice wird
+  abgeschnitten, wenn die Voice nach 16 Starts wiederverwendet wird); Toleranz
+  ±10 % spaced, ±20 % burst (korrelierte Überlagerung derselben Aufnahme).
+  Onset-Detektor nur noch für den Built-in-Klick (echte Aufnahmen haben mehrere
+  Transienten pro Slice).
+
+Messwerte (Debug, 128 Frames): alle 7 Packs + Klick `--selftest --burst 20`
+PASS, e2r p95 6,2–6,4 ms, 0 Overloads. `--map topre`: Buchstaben 26
+verschiedene Slices, Space #56, Enter #39, Backspace #15. holy-pandas:
+Shift → GENERIC_R3, Release → release/GENERIC (per `--diag --all` belegt).
+
 ## Offene Punkte
-- 64 Frames laufen ohne Overloads und halbieren die Latenz. Default bleibt 128
-  (Spezifikation); Umschalten in Phase 4 als Option denkbar.
-- Bei Gerätewechsel mit anderer Samplerate resampelt der AVAudioEngine-Mixer
-  zur Laufzeit; Neu-Dekodieren der Sample-Tabelle steht aus (Phase 3/4).
-- Sample-Tabelle ist nur vor `engine.start()` befüllbar (Phase 3: Pack-Wechsel
-  → Engine stoppen, neu laden, starten).
-- Keine Realtime-Thread-Policy für Tap-/Trigger-Thread; Latenz dort ~0,1 ms,
-  nicht nötig.
-- Sporadisches `reenabled=1` in Phase-2-Zwischenläufen gesehen (Grund nicht
-  protokolliert, seitdem Zähler getrennt). Kein Event ging verloren.
+- `tapDisabledByUserInput` tritt sporadisch auf (1× in ~20 Läufen), Re-Enable
+  greift, kein Event verloren. Ursache unklar.
+- Pack-Wechsel zur Laufzeit: Sample-Tabelle nur vor `engine.start()` befüllbar
+  → Phase 4 stoppt die Engine, lädt neu, startet (kurze Pause, akzeptabel).
+- 64 Frames laufen sauber (p95 3,7 ms); Default bleibt 128.
+- Gerätewechsel mit anderer Rate: Mixer resampelt; Neu-Dekodieren steht aus.
+- Mechvibes-Codes 60999–61011 (Medientasten?) sind nicht gemappt.
 
 ## Nächster Schritt
-Phase 3 — Sound-Packs: Mechvibes-`config.json` parsen (v1 single-file mit
-`[start_ms, dauer_ms]`, v2 multi-file), Buffer schneiden und in die
-Sample-Tabelle laden, `Scancodes.swift` CGKeyCode → Windows-Scancode,
-`--list-packs`, `--diag` zeigt Sample-ID pro Taste. Pack liegt unter `packs/`.
+Phase 4 — Menüleisten-App: .app-Bundle, `NSStatusItem`, `LSUIElement`,
+SwiftUI-Popover mit Lautstärke und **Pack-Dropdown** (Wunsch des Entwicklers),
+Autostart `SMAppService`, selbstsigniertes Zertifikat, damit die Freigabe
+Rebuilds überlebt.

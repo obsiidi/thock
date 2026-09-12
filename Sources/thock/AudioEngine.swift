@@ -32,8 +32,7 @@ final class AudioEngine {
     let format: AVAudioFormat
     let requestedBufferFrames: UInt32
 
-    private(set) var click: AVAudioPCMBuffer?
-    private var clickIndex: Int32 = -1
+    private(set) var pack: Soundpack?
     private var deviceID: AudioDeviceID = 0
     private let overloads: UnsafeMutablePointer<UInt64>
     private let overloadQueue = DispatchQueue(label: "thock.overload")
@@ -76,20 +75,20 @@ final class AudioEngine {
         catomic_load_acquire(overloads)
     }
 
-    func loadClick(url: URL) throws {
-        let file = try AVAudioFile(forReading: url)
-        let frames = AVAudioFrameCount(file.length)
-        guard let raw = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames) else {
-            throw Failure.bufferAllocation
-        }
-        try file.read(into: raw)
-        let decoded = try SampleConverter.convert(raw, to: format)
-        click = decoded
-        clickIndex = mixer.register(decoded)
+    /// Loads a Mechvibes pack directory into the sample table. Before start().
+    @discardableResult
+    func load(packDirectory: URL) throws -> Soundpack {
+        let p = try SoundpackLoader.load(directory: packDirectory, mixer: mixer, format: format)
+        pack = p
+        return p
     }
 
-    var clickFrames: AVAudioFrameCount {
-        click?.frameLength ?? 0
+    /// Loads the built-in click as a one-sample pack. Before start().
+    @discardableResult
+    func loadBuiltInClick(url: URL) throws -> Soundpack {
+        let p = try SoundpackLoader.builtInClick(url: url, mixer: mixer, format: format)
+        pack = p
+        return p
     }
 
     func start() throws {
@@ -110,10 +109,10 @@ final class AudioEngine {
         engine.stop()
     }
 
-    /// Trigger thread only. Queues the click for the next render cycle.
+    /// Trigger thread only. Queues a sample for the next render cycle.
     @inline(__always)
-    func trigger(rate: Float) -> Bool {
-        mixer.trigger(sample: clickIndex, rate: rate)
+    func trigger(sample: Int32, rate: Float) -> Bool {
+        mixer.trigger(sample: sample, rate: rate)
     }
 
     /// The engine stops itself when the output device changes (headphones

@@ -61,8 +61,11 @@ func formatLine(_ e: KeyEvent) -> String {
     let lat = Clock.latMicros(e).map(String.init) ?? "-"
     let voice = e.scheduled == 0 ? "-" : "\(e.voice)"
     let rate = e.scheduled == 0 ? "-" : String(format: "%.3f", e.rate)
-    return "\(kind) code=\(e.keyCode) rep=\(e.autorepeat) syn=\(e.synthetic) "
-        + "tap_us=\(Clock.tapMicros(e)) sched_us=\(sched) lat_us=\(lat) "
+    let sample = e.sample < 0 ? "-" : "\(e.sample)"
+    let scan = e.scan < 0 ? "-" : "\(e.scan)"
+    let head = "\(kind) key=\(Scancodes.name(Int(e.keyCode))) code=\(e.keyCode) scan=\(scan) "
+        + "down=\(e.pressed) sample=\(sample) rep=\(e.autorepeat) syn=\(e.synthetic) "
+    return head + "tap_us=\(Clock.tapMicros(e)) sched_us=\(sched) lat_us=\(lat) "
         + "voice=\(voice) rate=\(rate) "
         + "flags=0x\(String(e.flags, radix: 16)) ts=\(e.timestamp) seq=\(e.seq)"
 }
@@ -242,16 +245,43 @@ final class EventCollector {
 
 // MARK: - Audio setup shared by run / diag / selftest
 
-func makeAudio(samplePath: String, bufferFrames: UInt32) -> AudioEngine? {
+/// Which sounds to load.
+enum PackSelection {
+    case builtIn(clickPath: String)
+    case directory(URL)
+
+    var label: String {
+        switch self {
+        case .builtIn(let p): return "built-in click (\(p))"
+        case .directory(let u): return u.lastPathComponent
+        }
+    }
+}
+
+/// Engine with the pack loaded; `start` false leaves the engine stopped
+/// (for --map / --list-packs, which only need the sample tables).
+func makeAudio(_ selection: PackSelection, bufferFrames: UInt32, start: Bool = true) -> AudioEngine? {
     do {
         let audio = try AudioEngine(bufferFrames: bufferFrames)
-        try audio.loadClick(url: URL(fileURLWithPath: samplePath))
-        try audio.start()
+        switch selection {
+        case .builtIn(let path):
+            try audio.loadBuiltInClick(url: URL(fileURLWithPath: path))
+        case .directory(let url):
+            try audio.load(packDirectory: url)
+        }
+        if start {
+            try audio.start()
+        }
         return audio
     } catch {
-        stderrLine("thock: audio setup failed (\(error)) — sample: \(samplePath)")
+        stderrLine("thock: audio setup failed for \(selection.label): \(error)")
         return nil
     }
+}
+
+func describe(_ p: Soundpack) -> String {
+    "pack=\"\(p.name)\" type=\(p.type) v\(p.version) samples=\(p.samples.count) "
+        + "keys: defined=\(p.directlyDefined) default=\(p.byDefault) keyup=\(p.hasKeyUp ? "yes" : "no")"
 }
 
 func describe(_ d: AudioEngine.DeviceInfo) -> String {
@@ -263,10 +293,10 @@ func describe(_ d: AudioEngine.DeviceInfo) -> String {
 
 /// Sum of squares per channel, averaged over channels: the energy of one
 /// click, used as the yardstick for the mixer energy in the self-test.
-func energy(of buffer: AVAudioPCMBuffer) -> Double {
+func energy(of buffer: AVAudioPCMBuffer, upTo limit: Int = Int.max) -> Double {
     guard let data = buffer.floatChannelData else { return 0 }
     let channels = Int(buffer.format.channelCount)
-    let frames = Int(buffer.frameLength)
+    let frames = min(Int(buffer.frameLength), max(0, limit))
     var total = 0.0
     for ch in 0..<channels {
         for i in 0..<frames {
@@ -312,11 +342,11 @@ enum LogMode {
     case all
 }
 
-func runMain(samplePath: String, bufferFrames: UInt32, jitter: Float, log: LogMode?) -> Int32 {
+func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, log: LogMode?) -> Int32 {
     guard ensureListenPermission() else { return 2 }
-    guard let audio = makeAudio(samplePath: samplePath, bufferFrames: bufferFrames) else { return 4 }
+    guard let audio = makeAudio(selection, bufferFrames: bufferFrames), let pack = audio.pack else { return 4 }
 
-    let pipeline = Pipeline(audio: audio)
+    let pipeline = Pipeline(audio: audio, pack: pack)
     pipeline.jitter = jitter
     let stats = DiagStats()
     let drain = Drain(ring: pipeline.logRing) { e in
@@ -336,8 +366,8 @@ func runMain(samplePath: String, bufferFrames: UInt32, jitter: Float, log: LogMo
     }
     drain.start()
 
-    stderrLine("thock: running. \(describe(audio.deviceInfo())) click_frames=\(audio.clickFrames) "
-        + "voices=\(VoiceMixer.voiceCount)")
+    stderrLine("thock: running. \(describe(audio.deviceInfo())) voices=\(VoiceMixer.voiceCount)")
+    stderrLine("thock: \(describe(pack))")
     if log != nil {
         stderrLine("thock: --diag " + (log == .all ? "(keyDown, keyUp, flagsChanged)" : "(keyDown only; --all for everything)"))
     }
@@ -477,7 +507,7 @@ final class MixerProbe {
 struct SelftestOptions {
     var count: Int
     var spacingMicros: UInt32
-    var samplePath: String
+    var selection: PackSelection
     var bufferFrames: UInt32
     var label: String
     var jitter: Float = 0.03
@@ -491,16 +521,22 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
         stderrLine("thock: CGEventSource failed")
         return 3
     }
-    guard let audio = makeAudio(samplePath: opt.samplePath, bufferFrames: opt.bufferFrames) else { return 4 }
-    guard let click = audio.click else {
-        stderrLine("thock: no click loaded")
+    guard let audio = makeAudio(opt.selection, bufferFrames: opt.bufferFrames), let pack = audio.pack else { return 4 }
+    // The synthetic key is F20 (CGKeyCode 90): whatever the pack maps it to.
+    let downSample = pack.keyDown[90]
+    let upSample = pack.keyUp[90]
+    guard downSample >= 0 else {
+        stderrLine("thock: pack maps no sound to F20, cannot self-test")
         return 4
     }
+    let soundsPerPress = 1 + (upSample >= 0 ? 1 : 0)
+    let isClick: Bool
+    if case .builtIn = opt.selection { isClick = true } else { isClick = false }
 
     let probe = MixerProbe(sampleRate: audio.format.sampleRate)
     probe.install(on: audio.engine.mainMixerNode)
 
-    let pipeline = Pipeline(audio: audio)
+    let pipeline = Pipeline(audio: audio, pack: pack)
     pipeline.jitter = opt.jitter
     let collector = EventCollector()
     let drain = Drain(ring: pipeline.logRing) { collector.add($0) }
@@ -516,7 +552,9 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
 
     let device = audio.deviceInfo()
     stderrLine("selftest: mode=\(opt.label) count=\(opt.count) spacing=\(opt.spacingMicros / 1000)ms "
-        + "\(describe(device)) click_frames=\(audio.clickFrames) voices=\(VoiceMixer.voiceCount)")
+        + "\(describe(device)) voices=\(VoiceMixer.voiceCount)")
+    stderrLine("selftest: \(describe(pack)) F20 -> down=#\(downSample) up=#\(upSample) "
+        + "frames=\(pack.samples[Int(downSample)].frames)")
 
     keys.burst(opt.count, spacingMicros: opt.spacingMicros)
     collector.waitForKeyDowns(opt.count, timeout: 3)
@@ -530,10 +568,12 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
     // Events (trigger thread) and starts (render thread) are both FIFO.
     let downs = collector.snapshot.filter { $0.kind == .keyDown && $0.synthetic != 0 }
     let scheduled = downs.filter { $0.scheduled != 0 }.sorted { $0.scheduled < $1.scheduled }
-    var starts: [VoiceCommand] = []
+    var allStarts: [VoiceCommand] = []
     while let c = audio.mixer.startLog.pop() {
-        starts.append(c)
+        allStarts.append(c)
     }
+    // Key-up sounds interleave with key-down starts; keep the down ones.
+    let starts = allStarts.filter { $0.sample == downSample }
     let onsets = probe.snapshot.sorted()
 
     var e2rMicros: [Int64] = []       // event -> render cycle that started the voice
@@ -572,22 +612,39 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
     let dropped = pipeline.tapRing.droppedCount + pipeline.logRing.droppedCount
     let commandsDropped = audio.mixer.commandsDropped
     let overloads = audio.overloadCount
-    let clickEnergy = energy(of: click)
-    let energyRatio = clickEnergy > 0 ? probe.energy / clickEnergy : 0
+    // Expected mixer energy: every started voice plays its sample until it
+    // ends or until the round-robin reuses the voice 16 starts later.
+    var expectedEnergy = 0.0
+    var stolen = 0
+    for (j, c) in allStarts.enumerated() {
+        guard let buffer = audio.mixer.buffer(at: c.sample) else { continue }
+        var limit = Int.max
+        if j + VoiceMixer.voiceCount < allStarts.count {
+            let dtNs = Clock.ticksToNanos(allStarts[j + VoiceMixer.voiceCount].started) - Clock.ticksToNanos(c.started)
+            limit = Int(Double(dtNs) / 1e9 * audio.format.sampleRate * Double(c.rate))
+            if limit < Int(buffer.frameLength) { stolen += 1 }
+        }
+        expectedEnergy += energy(of: buffer, upTo: limit)
+    }
+    let energyRatio = expectedEnergy > 0 ? probe.energy / expectedEnergy : 0
+    let expectedVoices = opt.count * soundsPerPress
     let rateMin = String(format: "%.3f", rates.min() ?? 1)
     let rateMax = String(format: "%.3f", rates.max() ?? 1)
     let tag = "selftest[\(opt.label)]"
 
     print("\(tag): keyDowns=\(downs.count)/\(opt.count) scheduled=\(scheduled.count)/\(opt.count) "
-        + "voices_started=\(voicesStarted)/\(opt.count) onsets=\(onsets.count)/\(opt.count) "
-        + "energy_ratio=\(String(format: "%.2f", energyRatio)) (expected \(opt.count)) "
+        + "voices_started=\(voicesStarted)/\(expectedVoices) stolen=\(stolen) "
+        + (isClick ? "onsets=\(onsets.count)/\(opt.count) " : "")
+        + "energy=\(String(format: "%.2f", energyRatio))x expected "
         + "mixer_peak=\(String(format: "%.3f", probe.peak))")
     print("\(tag): overloads=\(overloads) dropped=\(dropped) commands_dropped=\(commandsDropped) "
         + "reenabled=\(pipeline.tap.reenableCount) (\(pipeline.tap.disableReasons)) "
         + "io_frames=\(device.bufferFrames)/\(device.bufferFramesRequested) rate=\(rateMin)..\(rateMax)")
     print("\(tag): e2r_us     \(e2r.description)   (event -> render cycle that started the voice)")
-    print("\(tag): onset_us   \(onset.description)   (event -> onset at mixer output, n=\(onset.count))")
-    print("\(tag): agree_us   \(agree.description)   (onset - render cycle; should be ~0..+1 buffer)")
+    if isClick {
+        print("\(tag): onset_us   \(onset.description)   (event -> onset at mixer output, n=\(onset.count))")
+        print("\(tag): agree_us   \(agree.description)   (onset - render cycle; should be ~0..+1 buffer)")
+    }
     print("\(tag): lat_us     \(lat.description)   (event -> command queued)")
     print("\(tag): tap_us     \(tap.description)   (event -> tap callback)")
     print("\(tag): queue_us   \(queue.description)   (command queued -> render cycle)")
@@ -596,14 +653,17 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
     if scheduled.count != opt.count {
         failures.append("scheduled \(scheduled.count) of \(opt.count) keyDowns")
     }
-    if voicesStarted != opt.count {
-        failures.append("render block started \(voicesStarted) voices, expected \(opt.count)")
+    if voicesStarted != expectedVoices {
+        failures.append("render block started \(voicesStarted) voices, expected \(expectedVoices)")
     }
-    if opt.spacingMicros >= 60_000 && onsets.count != opt.count {
+    if isClick && opt.spacingMicros >= 60_000 && onsets.count != opt.count {
         failures.append("onsets \(onsets.count), expected \(opt.count)")
     }
-    if abs(energyRatio - Double(opt.count)) > 0.1 * Double(opt.count) {
-        failures.append("mixer energy = \(String(format: "%.2f", energyRatio)) clicks, expected \(opt.count) ±10%")
+    // Overlapping copies of the same recording add with partial correlation,
+    // so bursts get a wider band than isolated hits.
+    let energyTolerance = opt.spacingMicros >= 60_000 ? 0.1 : 0.2
+    if abs(energyRatio - 1) > energyTolerance {
+        failures.append("mixer energy = \(String(format: "%.2f", energyRatio))x expected, tolerance ±\(Int(energyTolerance * 100))%")
     }
     if overloads != 0 {
         failures.append("\(overloads) HAL processor overloads")
@@ -629,6 +689,52 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
         print("\(tag): FAIL — \(f)")
     }
     return 1
+}
+
+// MARK: - --list-packs / --map
+
+func runListPacks(root: URL, bufferFrames: UInt32) -> Int32 {
+    let dirs = SoundpackLoader.listPacks(in: root)
+    if dirs.isEmpty {
+        print("no packs found in \(root.path) (a pack is a folder with a config.json)")
+        return 1
+    }
+    for dir in dirs {
+        if let audio = makeAudio(.directory(dir), bufferFrames: bufferFrames, start: false), let p = audio.pack {
+            print("\(dir.lastPathComponent.padding(toLength: 26, withPad: " ", startingAt: 0)) \(describe(p))")
+        } else {
+            print("\(dir.lastPathComponent.padding(toLength: 26, withPad: " ", startingAt: 0)) FAILED to load")
+        }
+    }
+    return 0
+}
+
+func runMap(_ selection: PackSelection, bufferFrames: UInt32) -> Int32 {
+    guard let audio = makeAudio(selection, bufferFrames: bufferFrames, start: false), let p = audio.pack else { return 4 }
+    print(describe(p))
+    print("cg   key        scan    down  source                 up    source")
+    for cg in 0..<128 where !Scancodes.names[cg].isEmpty {
+        let scan = Scancodes.table[cg]
+        let down = p.keyDown[cg]
+        let up = p.keyUp[cg]
+        func src(_ i: Int32) -> String { i < 0 ? "" : p.samples[Int(i)].source }
+        func pad(_ s: String, _ n: Int) -> String { s.padding(toLength: n, withPad: " ", startingAt: 0) }
+        print(pad("\(cg)", 5) + pad(Scancodes.name(cg), 11) + pad(scan < 0 ? "-" : "\(scan)", 8)
+            + pad(down < 0 ? "-" : "#\(down)", 6) + pad(src(down), 23)
+            + pad(up < 0 ? "-" : "#\(up)", 6) + src(up))
+    }
+    let letters = (0..<26).compactMap { i -> Int32? in
+        let cg = [0, 11, 8, 2, 14, 3, 5, 4, 34, 38, 40, 37, 46, 45, 31, 35, 12, 15, 1, 17, 32, 9, 13, 7, 16, 6][i]
+        return p.keyDown[cg]
+    }
+    let letterSet = Set(letters)
+    let space = p.keyDown[49], enter = p.keyDown[36], backspace = p.keyDown[51]
+    print("summary: letters use \(letterSet.count) sample(s) \(letterSet.sorted().map { "#\($0)" }.joined(separator: " ")); "
+        + "space=#\(space) enter=#\(enter) backspace=#\(backspace)")
+    let distinct = !letterSet.contains(space) && !letterSet.contains(enter) && !letterSet.contains(backspace)
+        && Set([space, enter, backspace]).count == 3
+    print("summary: space/enter/backspace distinct from letters and each other: \(distinct ? "yes" : "NO")")
+    return distinct ? 0 : 1
 }
 
 // MARK: - --selftest-tap (Phase 0: capture only, no audio)
