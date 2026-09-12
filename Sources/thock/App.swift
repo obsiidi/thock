@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -8,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var signalSources: [DispatchSourceSignal] = []
+    private var enabledObserver: AnyCancellable?
 
     init(state: AppState) {
         self.state = state
@@ -22,6 +24,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.image?.isTemplate = true
             button.target = self
             button.action = #selector(togglePopover)
+        }
+
+        // Dim the icon while sounds are switched off.
+        enabledObserver = state.$enabled.sink { [weak self] enabled in
+            self?.statusItem.button?.appearsDisabled = !enabled
         }
 
         popover = NSPopover()

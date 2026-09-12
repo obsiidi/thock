@@ -10,6 +10,7 @@ final class AppState: ObservableObject {
         static let pack = "pack"
         static let volume = "volume"
         static let keyUp = "keyup"
+        static let enabled = "enabled"
     }
 
     @Published var packs: [Resources.PackEntry] = []
@@ -32,6 +33,13 @@ final class AppState: ObservableObject {
         }
     }
     @Published var packHasKeyUp = false
+    /// Sounds on/off without quitting; the tap keeps running.
+    @Published var enabled: Bool {
+        didSet {
+            defaults.set(enabled, forKey: Keys.enabled)
+            queue.async { [weak self] in self?.pipeline?.muted = !(self?.enabled ?? true) }
+        }
+    }
     @Published var permissionGranted = false
     @Published var running = false
     @Published var status = "Startet …"
@@ -56,6 +64,7 @@ final class AppState: ObservableObject {
         volume = v ?? 1.0
         launchAtLogin = SMAppService.mainApp.status == .enabled
         keyUpSounds = defaults.object(forKey: Keys.keyUp) as? Bool ?? true
+        enabled = defaults.object(forKey: Keys.enabled) as? Bool ?? true
     }
 
     // MARK: lifecycle
@@ -142,6 +151,7 @@ final class AppState: ObservableObject {
             audio.engine.mainMixerNode.outputVolume = volume
             let pipeline = Pipeline(audio: audio, pack: pack)
             pipeline.keyUpSounds = keyUpSounds
+            pipeline.muted = !enabled
             let stats = DiagStats()
             let verbose = self.verbose
             let drain = Drain(ring: pipeline.logRing) { e in

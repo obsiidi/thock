@@ -10,8 +10,13 @@ struct PopoverView: View {
                 Text("thock").font(.headline)
                 Spacer()
                 Circle()
-                    .fill(state.running ? Color.green : (state.permissionGranted ? Color.orange : Color.red))
+                    .fill(state.running && state.enabled ? Color.green
+                          : (state.permissionGranted ? Color.orange : Color.red))
                     .frame(width: 9, height: 9)
+                Toggle("", isOn: $state.enabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                    .help("Tastaturgeräusche ein/aus")
             }
 
             Picker("Sound", selection: $state.selectedPack) {
