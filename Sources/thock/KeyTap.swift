@@ -17,6 +17,8 @@ final class KeyTap {
     }
 
     let ring: EventRing
+    /// Signalled once per pushed event so a consumer can block instead of poll.
+    let wake = DispatchSemaphore(value: 0)
     fileprivate var port: CFMachPort?
     fileprivate let seq: UnsafeMutablePointer<UInt64>
     fileprivate let reenables: UnsafeMutablePointer<UInt64>
@@ -163,6 +165,7 @@ private func keyTapCallback(
     e.seq = s
     catomic_store_release(tap.seq, s &+ 1)
     _ = tap.ring.push(e)
+    tap.wake.signal()
 
     return Unmanaged.passUnretained(event)
 }
