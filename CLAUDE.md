@@ -14,7 +14,8 @@ Nichts in diesem Projekt darf Geld kosten. Nicht jetzt, nicht später, nicht
 Verboten ohne Ausnahme:
 
 - Kostenpflichtige Dienste, APIs, Abos, Testzeiträume mit Zahlungsdaten
-- Apple Developer Program ($99/Jahr) — wird für eine private App nicht gebraucht
+- Apple Developer Program ($99/Jahr) — für Beta/MVP nicht; ob später, hält
+  sich der Entwickler offen (Build hat dafür einen vorbereiteten Schalter)
 - Kostenpflichtige Pakete, Assets, Fonts, Sound-Bibliotheken, Lizenzen
 - Alles, was ein Konto mit hinterlegter Zahlungsmethode verlangt
 
@@ -106,8 +107,12 @@ Abnahme einer Phase = `swift build` ohne Warnungen **und** `swift run thock
 
 ## Arbeitsweise
 
-- Eine Phase pro Durchlauf. Am Ende jeder Phase: Commit, kurzer Bericht, Stopp.
-- Vor dem ersten Code jeder Phase: Plan vorlegen, auf Freigabe warten.
+- Phasen 0–4: eine Phase pro Durchlauf, Plan vorlegen, auf Freigabe warten.
+- **Ab Phase 5 (MVP, seit 2026-09-17) autonom:** Entscheidungen selbst
+  treffen, nach jeder Phase Selbstprüf-Loop (Build, Selftests, Diff, Fixes),
+  dann ohne Rückfrage weiter. Melden nur, wenn etwas nur der Entwickler kann.
+  Maßstab MVP: reibungslos für den Nutzer, nicht perfekt.
+- Am Ende jeder Phase: Commit, PROGRESS.md.
 - `PROGRESS.md` nach jeder Phase aktualisieren (Stand, offene Punkte, nächster
   Schritt), damit eine neue Sitzung ohne Kontext weiterarbeiten kann.
 - Commit-Messages und Code-Kommentare auf Englisch, Antworten im Chat auf Deutsch.
