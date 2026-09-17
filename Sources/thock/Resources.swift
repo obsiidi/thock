@@ -12,6 +12,13 @@ enum Resources {
         return URL(fileURLWithPath: "packs")
     }
 
+    /// Where imported packs live: ~/Library/Application Support/thock/packs
+    static var userPacksRoot: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
+        return base.appendingPathComponent("thock/packs", isDirectory: true)
+    }
+
     static var clickURL: URL {
         if let bundled = Bundle.main.resourceURL?.appendingPathComponent("Samples/click.wav"),
            FileManager.default.fileExists(atPath: bundled.path) {
@@ -25,6 +32,18 @@ enum Resources {
         let directory: URL
         let name: String
         var id: String { directory.lastPathComponent }
+    }
+
+    /// Bundled packs plus imported ones; an imported pack with the same
+    /// folder name as a bundled one wins.
+    static func allPackEntries() -> [PackEntry] {
+        var byID: [String: PackEntry] = [:]
+        var order: [String] = []
+        for entry in packEntries(in: packsRoot) + packEntries(in: userPacksRoot) {
+            if byID[entry.id] == nil { order.append(entry.id) }
+            byID[entry.id] = entry
+        }
+        return order.compactMap { byID[$0] }
     }
 
     static func packEntries(in root: URL) -> [PackEntry] {

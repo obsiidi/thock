@@ -13,6 +13,7 @@ final class AppState: ObservableObject {
         static let enabled = "enabled"
         static let velocity = "velocity"
         static let sensitivity = "sensitivity"
+        static let onboarded = "onboarded"
     }
 
     @Published var packs: [Resources.PackEntry] = []
@@ -61,8 +62,14 @@ final class AppState: ObservableObject {
     @Published var sensorStatus = ""
     @Published var permissionGranted = false
     @Published var running = false
-    @Published var status = "Startet …"
+    @Published var status = "Starting…"
     @Published var packInfo = ""
+    @Published var update: UpdateChecker.Update?
+    var onboarded: Bool {
+        get { defaults.bool(forKey: Keys.onboarded) }
+        set { defaults.set(newValue, forKey: Keys.onboarded) }
+    }
+    var version: String { UpdateChecker.currentVersion }
 
     let verbose: Bool
     let bufferFrames: UInt32
@@ -92,12 +99,81 @@ final class AppState: ObservableObject {
     // MARK: lifecycle
 
     func start() {
-        packs = Resources.packEntries(in: Resources.packsRoot)
+        reloadPacks()
         if !packs.contains(where: { $0.id == selectedPack }), let first = packs.first {
             selectedPack = first.id      // triggers switchPack; engine not running yet -> just loads
+        } else {
+            checkPermissionAndRun()
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 5) {
+            UpdateChecker.check { update in
+                guard let u = update else { return }
+                DispatchQueue.main.async { self.update = u }
+            }
+        }
+    }
+
+    func reloadPacks() {
+        packs = Resources.allPackEntries()
+        let user = Resources.packEntries(in: Resources.userPacksRoot).count
+        stderrLine("thock: packs=\(packs.count) (imported: \(user)) in \(Resources.userPacksRoot.path)")
+    }
+
+    // MARK: pack import
+
+    /// Copies a Mechvibes pack folder into the user packs directory, then
+    /// selects it. Errors land in `status`.
+    func importPack(from source: URL) {
+        let fm = FileManager.default
+        let config = source.appendingPathComponent("config.json")
+        guard fm.fileExists(atPath: config.path) else {
+            status = "Not a sound pack: no config.json in \(source.lastPathComponent)."
             return
         }
-        checkPermissionAndRun()
+        // Validate by loading it into a throwaway engine before copying.
+        guard let probe = makeAudio(.directory(source), bufferFrames: bufferFrames, start: false), probe.pack != nil else {
+            status = "Could not load \(source.lastPathComponent) — see the log for details."
+            return
+        }
+        let root = Resources.userPacksRoot
+        let destination = root.appendingPathComponent(source.lastPathComponent)
+        do {
+            try fm.createDirectory(at: root, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: destination.path) {
+                try fm.removeItem(at: destination)
+            }
+            try fm.copyItem(at: source, to: destination)
+        } catch {
+            status = "Import failed: \(error.localizedDescription)"
+            return
+        }
+        reloadPacks()
+        selectedPack = destination.lastPathComponent
+    }
+
+    func chooseAndImportPack() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Choose a Mechvibes sound pack folder (it contains a config.json)."
+        panel.prompt = "Import"
+        NSApp.activate(ignoringOtherApps: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            importPack(from: url)
+        }
+    }
+
+    func revealPacksFolder() {
+        let root = Resources.userPacksRoot
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        NSWorkspace.shared.activateFileViewerSelecting([root])
+    }
+
+    func openFeedback() {
+        if let url = URL(string: "https://github.com/\(UpdateChecker.repository)/issues") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     func stop() {
@@ -141,7 +217,7 @@ final class AppState: ObservableObject {
             permissionRequested = true
             _ = CGRequestListenEventAccess()
         }
-        status = "Eingabeüberwachung fehlt — in den Systemeinstellungen für thock einschalten."
+        status = "Input Monitoring is not allowed yet — turn it on for thock in System Settings."
         if permissionTimer == nil {
             stderrLine("thock: waiting for Input Monitoring permission (checking every 2 s)")
             permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
@@ -170,11 +246,11 @@ final class AppState: ObservableObject {
                 selection = .builtIn(clickPath: Resources.clickURL.path)
             }
             guard let audio = makeAudio(selection, bufferFrames: bufferFrames), let pack = audio.pack else {
-                publish(status: "Audio konnte nicht gestartet werden (\(selection.label)).", running: false)
+                publish(status: "Audio could not start (\(selection.label)).", running: false)
                 return
             }
             audio.engine.mainMixerNode.outputVolume = volume
-            var sensorText = "Kein Sensor in diesem Mac — feste Lautstärke."
+            var sensorText = "No motion sensor in this Mac — fixed loudness."
             if sensorAvailable {
                 if motion == nil {
                     let m = MotionSensor()
@@ -185,7 +261,7 @@ final class AppState: ObservableObject {
                         stderrLine("thock: accelerometer start failed: \(error)")
                     }
                 }
-                sensorText = motion != nil ? "Beschleunigungssensor aktiv." : "Sensor vorhanden, aber nicht lesbar — feste Lautstärke."
+                sensorText = motion != nil ? "Motion sensor active." : "Sensor present but not readable — fixed loudness."
             }
             let pipeline = Pipeline(audio: audio, pack: pack, motion: motion)
             pipeline.keyUpSounds = keyUpSounds
@@ -202,7 +278,7 @@ final class AppState: ObservableObject {
                 try pipeline.start()
             } catch {
                 audio.stop()
-                publish(status: "Tastatur-Tap verweigert (\(error)). Eingabeüberwachung prüfen, App neu starten.",
+                publish(status: "Keyboard access was refused (\(error)). Check Input Monitoring and restart thock.",
                         running: false)
                 stderrLine("thock: tap failed: \(error)")
                 return
@@ -217,7 +293,7 @@ final class AppState: ObservableObject {
             stderrLine("thock: \(info)")
             let hasKeyUp = pack.hasKeyUp
             stderrLine("thock: velocity " + (motion != nil ? "on (accelerometer)" : "off (no sensor)"))
-            publish(status: "Aktiv — \(pack.name)", running: true, packInfo: info)
+            publish(status: "Active — \(pack.name)", running: true, packInfo: info)
             DispatchQueue.main.async {
                 self.packHasKeyUp = hasKeyUp
                 self.sensorStatus = sensorText
@@ -247,7 +323,7 @@ final class AppState: ObservableObject {
             checkPermissionAndRun()
             return
         }
-        status = "Lade \(id) …"
+        status = "Loading \(id)…"
         run()
     }
 
@@ -273,7 +349,7 @@ final class AppState: ObservableObject {
             stderrLine("thock: launch at login failed: \(error)")
             DispatchQueue.main.async {
                 self.launchAtLogin = SMAppService.mainApp.status == .enabled
-                self.status = "Anmeldeobjekt fehlgeschlagen: \(error.localizedDescription)"
+                self.status = "Launch at login failed: \(error.localizedDescription)"
             }
         }
     }

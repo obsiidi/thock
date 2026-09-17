@@ -11,12 +11,17 @@ IDENTITY="${THOCK_IDENTITY:-thock-dev}"
 BUNDLE_ID="com.mauriceberthold.thock"
 APP="dist/thock.app"
 
-swift build -c release 2>&1 | tail -1
+# Universal binary: one build per architecture, joined with lipo.
+swift build -c release --triple arm64-apple-macosx 2>&1 | tail -1
+swift build -c release --triple x86_64-apple-macosx 2>&1 | tail -1
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Samples"
-cp .build/release/thock "$APP/Contents/MacOS/thock"
+lipo -create .build/arm64-apple-macosx/release/thock .build/x86_64-apple-macosx/release/thock \
+     -output "$APP/Contents/MacOS/thock"
+lipo -info "$APP/Contents/MacOS/thock"
 cp Tools/Info.plist "$APP/Contents/Info.plist"
+cp Tools/thock.icns "$APP/Contents/Resources/thock.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp -R packs "$APP/Contents/Resources/packs"
 rm -f "$APP/Contents/Resources/packs/.gitkeep"

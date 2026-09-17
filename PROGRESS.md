@@ -224,12 +224,36 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   (`--diag-motion` läuft im Hintergrund und sammelt), `--motion-selftest`
   braucht den Entwickler.
 
+## Phase 6 — MVP-UX ✅
+- UI-Sprache **Englisch** (Zielgruppe GitHub/Reddit, wie Haptyk/Thock).
+- `Onboarding.swift`: Setup-Fenster beim ersten Start und immer, wenn die
+  Eingabeüberwachung fehlt: erklärt Menüleiste, Freigabe-Schritte, Live-Status,
+  „Done" setzt `onboarded`. Per Accessibility (System Events) geprüft: Texte,
+  Status „allowed", Done-Klick schließt und setzt das Flag.
+- App-Icon: `Tools/gen-icon.swift` (CoreGraphics → iconset → `iconutil`),
+  `Tools/thock.icns` committet, `CFBundleIconFile`.
+- Pack-Import: „+"-Knopf (NSOpenPanel) und Drag & Drop aufs Popover → Kopie
+  nach `~/Library/Application Support/thock/packs/`, Validierung durch
+  Probe-Laden, Auswahl wechselt sofort. `Resources.allPackEntries()` mischt
+  Bundle- und Nutzer-Packs (Nutzer gewinnt bei Namensgleichheit).
+- `UpdateChecker.swift`: einmal pro Start, 5 s nach Launch, GitHub
+  Releases-API (`mauriceberthold/thock`), Hinweis + Link im Popover; still bei
+  Fehlern. Einzige Netzverbindung der App.
+- Universal Binary: zwei Builds (`--triple`) + `lipo` in `bundle.sh`
+  (xcbuild fehlt ohne Xcode, `--arch a --arch b` geht nicht).
+- Popover: Ein/Aus, Sound + Import, Volume, Key force + Slider, Key-release,
+  Launch at login, Freigabe-Hinweis, Update-Link, Status, Footer mit Version,
+  Setup, Packs folder, Feedback (GitHub Issues), Quit. Per Accessibility
+  geprüft.
+- Version 0.6.0.
+
 ## Offene Punkte
-- Sensor-Report-Intervall bleibt nach Stop auf 1000 µs (absichtlich, wegen
-  paralleler thock-Prozesse).
-- Pack-Wechsel zur Laufzeit stoppt/startet Engine; Sensor bleibt offen.
+- Motion: echte Anschläge noch nicht gemessen (`--diag-motion` sammelt im
+  Hintergrund; bisher nur synthetische Escape-Events ≈ Rauschen).
+- Sensor-Report-Intervall bleibt nach Stop auf 1000 µs (absichtlich).
 - `tapDisabledByUserInput` sporadisch, Re-Enable greift.
 
 ## Nächster Schritt
-Phase 6 — MVP-UX: Onboarding-Fenster, Icon, Pack-Import, Update-Check,
-Universal Build, Feedback-Link.
+Phase 7 — Repo, Release, Homebrew: LICENSE, THIRD_PARTY, README,
+`Tools/release.sh` (DMG), GitHub-Actions-Build, Cask-Vorlage,
+Developer-ID-Schalter.

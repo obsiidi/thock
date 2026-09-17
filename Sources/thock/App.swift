@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover!
     private var signalSources: [DispatchSourceSignal] = []
     private var enabledObserver: AnyCancellable?
+    private let onboarding = OnboardingWindow()
 
     init(state: AppState) {
         self.state = state
@@ -34,7 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.behavior = .transient
         popover.animates = false
-        popover.contentViewController = NSHostingController(rootView: PopoverView(state: state))
+        popover.contentViewController = NSHostingController(rootView: PopoverView(state: state) { [weak self] in
+            self?.popover.performClose(nil)
+            self?.showOnboarding()
+        })
 
         for sig in [SIGTERM, SIGINT] {
             signal(sig, SIG_IGN)
@@ -45,6 +49,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         state.start()
+        if !state.onboarded || !CGPreflightListenEventAccess() {
+            showOnboarding()
+        }
+    }
+
+    private func showOnboarding() {
+        stderrLine("thock: showing setup window (onboarded=\(state.onboarded), permission=\(CGPreflightListenEventAccess()))")
+        onboarding.show(state: state)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
