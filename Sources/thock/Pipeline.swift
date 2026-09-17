@@ -14,6 +14,7 @@ final class Pipeline {
     let tap: KeyTap
     let audio: AudioEngine?
     let pack: Soundpack?
+    let velocity: VelocityEstimator
     /// Whether auto-repeated keyDowns trigger a sound. Off: a held key is
     /// one keystroke, like on a real keyboard.
     var clickOnRepeat = false
@@ -42,9 +43,10 @@ final class Pipeline {
     private let modState: UnsafeMutablePointer<UInt8>  // modifier key currently held?
     private var lastFlags: UInt64 = 0
 
-    init(audio: AudioEngine?, pack: Soundpack?) {
+    init(audio: AudioEngine?, pack: Soundpack?, motion: MotionSensor? = nil) {
         self.audio = audio
         self.pack = pack
+        velocity = VelocityEstimator(sensor: motion)
         tap = KeyTap(ring: tapRing)
         stopFlag = .allocate(capacity: 1)
         stopFlag.initialize(to: 0)
@@ -163,13 +165,28 @@ final class Pipeline {
                 if play, let pack = pack {
                     let sample = e.pressed == 1 ? pack.keyDown[k] : pack.keyUp[k]
                     if sample >= 0 {
-                        let rate = 1 + nextUnit() * jitter
-                        if audio?.trigger(sample: sample, rate: rate) ?? true {
+                        // Key-up sounds are quieter than the press that caused them.
+                        let now = mach_absolute_time()
+                        let force = e.pressed == 1 ? velocity.force(eventNanos: e.timestamp, nowTicks: now) : 0.5
+                        let velocityOn = velocity.enabled
+                        let gainDb = velocityOn ? VelocityEstimator.gainDb(force: force) : 0
+                        let rate = (1 + nextUnit() * jitter) * (velocityOn ? VelocityEstimator.rateFactor(force: force) : 1)
+                        var lowpass: Float = 0
+                        if velocityOn, let fs = audio?.format.sampleRate {
+                            let fc = VelocityEstimator.cutoffHz(force: force)
+                            if fc < Float(fs) * 0.45 {
+                                lowpass = Float(exp(-2 * Double.pi * Double(fc) / fs))
+                            }
+                        }
+                        let gain = powf(10, gainDb / 20)
+                        if audio?.trigger(sample: sample, rate: rate, gain: gain, lowpass: lowpass) ?? true {
                             e.voice = UInt8(nextVoice)
                             nextVoice = (nextVoice + 1) & (VoiceMixer.voiceCount - 1)
                         }
                         e.sample = sample
                         e.rate = rate
+                        e.force = velocityOn ? force : 1
+                        e.gainDb = gainDb
                         e.scheduled = mach_absolute_time()
                         catomic_store_release(triggered, catomic_load_relaxed(triggered) &+ 1)
                     }

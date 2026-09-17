@@ -34,6 +34,25 @@ struct PopoverView: View {
                     .frame(width: 40, alignment: .trailing)
             }
 
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle("Anschlagstärke", isOn: $state.velocityEnabled)
+                    .toggleStyle(.switch)
+                    .disabled(!state.sensorAvailable)
+                    .help("Lautstärke und Klang folgen der Kraft des Anschlags (Beschleunigungssensor).")
+                if state.sensorAvailable {
+                    HStack {
+                        Text("leicht").font(.caption2).foregroundColor(.secondary)
+                        Slider(value: $state.sensitivitySlider, in: 0...1)
+                            .disabled(!state.velocityEnabled)
+                        Text("fest").font(.caption2).foregroundColor(.secondary)
+                    }
+                    .help("Empfindlichkeit: links braucht es kräftige Anschläge für volle Lautstärke, rechts reichen leichte.")
+                }
+                if !state.sensorStatus.isEmpty {
+                    Text(state.sensorStatus).font(.caption2).foregroundColor(.secondary)
+                }
+            }
+
             Toggle("Loslass-Geräusche", isOn: $state.keyUpSounds)
                 .toggleStyle(.switch)
                 .disabled(!state.packHasKeyUp)

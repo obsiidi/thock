@@ -192,17 +192,44 @@ Abnahme-Belege:
 - Loslass-Schalter: an → `ku … sample=11`, aus → `ku … sample=-`.
 - Neustart-Beweis (App läuft nach Login) steht beim Entwickler aus.
 
+## MVP-Modus (ab 2026-09-17)
+Richtung A: Gratis-Haptyk, Open Source (MIT), null Kosten für Beta/MVP,
+Developer ID als offene Tür. Autonom: Selbstprüf-Loop pro Phase, weiter ohne
+Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
+
+## Phase 5 — Anschlagstärke (Sensor) ✅ (Code), Mess-Abnahme offen
+- `Motion.swift`: `AppleSPUHIDDevice` (Usage Page 0xFF00, Usage 3, 22-Byte-
+  Reports). **Nicht-offensichtlich:** Reports fließen erst, wenn auf den
+  `AppleSPUHIDDriver`-Services `SensorPropertyReportingState=1`,
+  `SensorPropertyPowerState=1`, `ReportInterval=1000` gesetzt sind (per
+  `IORegistryEntrySetCFProperty`, vor dem Öffnen). Ohne das: Open ok, null
+  Reports. Zwei Geräte matchen Usage 3; das mit `MaxInputReportSize == 22`
+  ist der Sensor. Gemessen: ~800 Reports/s, 0 Lücken, Rauschen ~0.001 g,
+  Zugriff ohne sudo (Eingabeüberwachung reicht).
+- Layout: u16 Sequenz @0, x/y/z IOFixed 16.16 @6/10/14, Die-Temperatur @18.
+- `MotionRing`: Broadcast-Ring (4096), Konsument scannt Zeitfenster rückwärts.
+- `VelocityEstimator`: Peak im Fenster −15…+5 ms um den Keydown, Rauschboden
+  ×2 abgezogen, laufendes Maximum (Halbwertszeit 60 s) × Empfindlichkeit →
+  Kraft 0…1. Kein Signal über dem Rauschen (externe Tastatur, synthetisch) →
+  neutrale Kraft 0,5. Kraft → Gain −15…0 dB (f^0.7), One-Pole-Tiefpass
+  1,5–20 kHz, ±1,5 % Rate. Key-up-Sounds fest bei 0,5.
+- `VoiceMixer`: `gain`, `lowpass` pro Voice (One-Pole im Render-Loop).
+- Popover: Schalter „Anschlagstärke", Slider leicht…fest (0,3…3, log),
+  Sensor-Statuszeile. Persistenz `velocity`, `sensitivity`.
+- CLI: `--diag-motion` (pro Anschlag Peak vor/nach Event, Versatz des
+  Maximums, Kraft — **keine Tastencodes**), `--motion-selftest` (10× leicht,
+  10× fest → PASS bei Median-Faktor ≥ 2 und getrennten Quartilen),
+  `--no-velocity`.
+- Offen: Timing-Fenster und Kraft-Skala mit echten Anschlägen prüfen
+  (`--diag-motion` läuft im Hintergrund und sammelt), `--motion-selftest`
+  braucht den Entwickler.
+
 ## Offene Punkte
-- Entwickler hört bei holy-pandas/cherrymx-black die Release-Sounds als
-  „Standard-Klicken"; Schalter jetzt aus (`keyup=0`). Physische Tastatur
-  klappert natürlich weiterhin.
-- Gerätewechsel mit anderer Rate: Mixer resampelt; Neu-Dekodieren steht aus.
+- Sensor-Report-Intervall bleibt nach Stop auf 1000 µs (absichtlich, wegen
+  paralleler thock-Prozesse).
+- Pack-Wechsel zur Laufzeit stoppt/startet Engine; Sensor bleibt offen.
 - `tapDisabledByUserInput` sporadisch, Re-Enable greift.
-- App liegt unter `dist/thock.app` im Projekt; Autostart zeigt auf diesen Pfad.
-  Verschieben nach ~/Applications = Autostart neu setzen (TCC bleibt, da
-  Zertifikat-basiert).
 
 ## Nächster Schritt
-Phase 5 — Anschlagstärke: erst `ioreg -l -w0 | grep -c AppleSPUHIDDevice`
-ausführen; > 0 → SPU-Accelerometer-Variante, sonst Schätzung aus Intervall +
-Haltedauer.
+Phase 6 — MVP-UX: Onboarding-Fenster, Icon, Pack-Import, Update-Check,
+Universal Build, Feedback-Link.

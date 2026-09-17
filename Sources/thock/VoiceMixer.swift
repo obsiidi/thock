@@ -6,7 +6,8 @@ import CAtomics
 struct VoiceCommand {
     var sample: Int32 = 0      // index into the sample table
     var rate: Float = 1        // playback rate (pitch)
-    var gain: Float = 1
+    var gain: Float = 1        // linear
+    var lowpass: Float = 0     // one-pole coefficient a = exp(-2π fc / fs); 0 = bypass
     var issued: UInt64 = 0     // mach ticks when the trigger thread pushed it
     var started: UInt64 = 0    // host time of the render cycle that started it
 }
@@ -78,6 +79,9 @@ struct VoiceState {
     var position: Float = 0    // fractional read position in frames
     var rate: Float = 1
     var gain: Float = 1
+    var lowpass: Float = 0     // 0 = bypass
+    var lpL: Float = 0         // filter state
+    var lpR: Float = 0
 }
 
 /// Polyphonic one-shot sample player inside a single AVAudioSourceNode.
@@ -161,11 +165,12 @@ final class VoiceMixer {
 
     /// Trigger thread. Returns false if the command ring is full.
     @inline(__always)
-    func trigger(sample: Int32, rate: Float, gain: Float = 1) -> Bool {
+    func trigger(sample: Int32, rate: Float, gain: Float = 1, lowpass: Float = 0) -> Bool {
         var c = VoiceCommand()
         c.sample = sample
         c.rate = rate
         c.gain = gain
+        c.lowpass = lowpass
         c.issued = mach_absolute_time()
         if commands.push(c) {
             return true
@@ -200,6 +205,9 @@ final class VoiceMixer {
             voices[v].position = 0
             voices[v].rate = scratch.pointee.rate
             voices[v].gain = scratch.pointee.gain
+            voices[v].lowpass = scratch.pointee.lowpass
+            voices[v].lpL = 0
+            voices[v].lpR = 0
             scratch.pointee.started = cycleTime
             _ = startLog.push(scratch.pointee)
             started &+= 1
@@ -218,19 +226,34 @@ final class VoiceMixer {
             var pos = voices[v].position
             let rate = voices[v].rate
             let gain = voices[v].gain
+            let lp = voices[v].lowpass
+            let oneMinusLp = 1 - lp
+            var yL = voices[v].lpL
+            var yR = voices[v].lpR
             let last = Float(s.frames - 1)
             var i = 0
             while i < frameCount && pos < last {
                 let idx = Int(pos)
                 let frac = pos - Float(idx)
-                left[i] += (srcL[idx] + (srcL[idx + 1] - srcL[idx]) * frac) * gain
-                if let r = right {
-                    r[i] += (srcR[idx] + (srcR[idx + 1] - srcR[idx]) * frac) * gain
+                var l = (srcL[idx] + (srcL[idx + 1] - srcL[idx]) * frac) * gain
+                var r = (srcR[idx] + (srcR[idx + 1] - srcR[idx]) * frac) * gain
+                if lp > 0 {
+                    // one-pole low-pass: y += (1 - a) * (x - y)
+                    yL += oneMinusLp * (l - yL)
+                    yR += oneMinusLp * (r - yR)
+                    l = yL
+                    r = yR
+                }
+                left[i] += l
+                if let rp = right {
+                    rp[i] += r
                 }
                 pos += rate
                 i += 1
             }
             voices[v].position = pos
+            voices[v].lpL = yL
+            voices[v].lpR = yR
             if pos >= last {
                 voices[v].active = false
             } else {

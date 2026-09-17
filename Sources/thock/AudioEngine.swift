@@ -111,8 +111,8 @@ final class AudioEngine {
 
     /// Trigger thread only. Queues a sample for the next render cycle.
     @inline(__always)
-    func trigger(sample: Int32, rate: Float) -> Bool {
-        mixer.trigger(sample: sample, rate: rate)
+    func trigger(sample: Int32, rate: Float, gain: Float = 1, lowpass: Float = 0) -> Bool {
+        mixer.trigger(sample: sample, rate: rate, gain: gain, lowpass: lowpass)
     }
 
     /// The engine stops itself when the output device changes (headphones

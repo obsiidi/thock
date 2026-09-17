@@ -63,8 +63,10 @@ func formatLine(_ e: KeyEvent) -> String {
     let rate = e.scheduled == 0 ? "-" : String(format: "%.3f", e.rate)
     let sample = e.sample < 0 ? "-" : "\(e.sample)"
     let scan = e.scan < 0 ? "-" : "\(e.scan)"
+    let force = e.sample < 0 ? "-" : String(format: "%.2f", e.force)
+    let gain = e.sample < 0 ? "-" : String(format: "%.1f", e.gainDb)
     let head = "\(kind) key=\(Scancodes.name(Int(e.keyCode))) code=\(e.keyCode) scan=\(scan) "
-        + "down=\(e.pressed) sample=\(sample) rep=\(e.autorepeat) syn=\(e.synthetic) "
+        + "down=\(e.pressed) sample=\(sample) force=\(force) gain_db=\(gain) rep=\(e.autorepeat) syn=\(e.synthetic) "
     return head + "tap_us=\(Clock.tapMicros(e)) sched_us=\(sched) lat_us=\(lat) "
         + "voice=\(voice) rate=\(rate) "
         + "flags=0x\(String(e.flags, radix: 16)) ts=\(e.timestamp) seq=\(e.seq)"
@@ -342,11 +344,21 @@ enum LogMode {
     case all
 }
 
-func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, log: LogMode?) -> Int32 {
+func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, velocity: Bool, log: LogMode?) -> Int32 {
     guard ensureListenPermission() else { return 2 }
     guard let audio = makeAudio(selection, bufferFrames: bufferFrames), let pack = audio.pack else { return 4 }
 
-    let pipeline = Pipeline(audio: audio, pack: pack)
+    var motion: MotionSensor?
+    if velocity && MotionSensor.isAvailable() {
+        let m = MotionSensor()
+        do {
+            try m.start()
+            motion = m
+        } catch {
+            stderrLine("thock: accelerometer unavailable (\(error)) — fixed loudness")
+        }
+    }
+    let pipeline = Pipeline(audio: audio, pack: pack, motion: motion)
     pipeline.jitter = jitter
     let stats = DiagStats()
     let drain = Drain(ring: pipeline.logRing) { e in
@@ -368,6 +380,7 @@ func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, lo
 
     stderrLine("thock: running. \(describe(audio.deviceInfo())) voices=\(VoiceMixer.voiceCount)")
     stderrLine("thock: \(describe(pack))")
+    stderrLine("thock: velocity " + (motion != nil ? "on (accelerometer)" : (velocity ? "off (no sensor)" : "off")))
     if log != nil {
         stderrLine("thock: --diag " + (log == .all ? "(keyDown, keyUp, flagsChanged)" : "(keyDown only; --all for everything)"))
     }
@@ -379,16 +392,214 @@ func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, lo
         pipeline.stop()
         drain.stop()
         audio.stop()
+        motion?.stop()
         fflush(stdout)
         stderrLine("thock: stopped. \(stats.summary()) clicks=\(pipeline.triggerCount) "
             + "voices_started=\(audio.mixer.voicesStarted) "
             + "seen=\(pipeline.tap.eventCount) dropped=\(pipeline.tapRing.droppedCount + pipeline.logRing.droppedCount) "
             + "commands_dropped=\(audio.mixer.commandsDropped) "
-            + "reenabled=\(pipeline.tap.reenableCount) (\(pipeline.tap.disableReasons)) overloads=\(audio.overloadCount)")
+            + "reenabled=\(pipeline.tap.reenableCount) (\(pipeline.tap.disableReasons)) overloads=\(audio.overloadCount)"
+            + (motion.map { " motion_reports=\($0.reportCount) gaps=\($0.gapCount)" } ?? ""))
         exit(0)
     }
     sigint.resume()
     dispatchMain()
+}
+
+// MARK: - --diag-motion / --motion-selftest
+
+/// One evaluated keystroke: peaks around the key event, evaluated ~40 ms
+/// after it so the post-window samples have arrived. No key identity is
+/// recorded — this log must never be a keylogger.
+struct MotionHit {
+    var eventNanos: UInt64
+    var prePeak: Float       // max impact in [-20 ms, 0]
+    var postPeak: Float      // max impact in (0, +20 ms]
+    var maxOffsetUs: Int64   // where the overall max lies relative to the event
+    var force: Float
+}
+
+/// Captures real (non-synthetic, non-repeat) key-downs together with the
+/// accelerometer and evaluates each one after a short delay.
+final class MotionCapture {
+    let sensor = MotionSensor()
+    let ring = EventRing()
+    private(set) var tap: KeyTap!
+    private var drain: Drain!
+    private let velocity: VelocityEstimator
+    private let lock = NSLock()
+    private var pending: [UInt64] = []      // event nanos awaiting evaluation
+    private(set) var hits: [MotionHit] = []
+    var onHit: ((MotionHit) -> Void)?
+    private var timer: DispatchSourceTimer?
+
+    init() {
+        velocity = VelocityEstimator(sensor: sensor)
+    }
+
+    func start() throws {
+        try sensor.start()
+        tap = KeyTap(ring: ring)
+        drain = Drain(ring: ring) { [weak self] e in
+            guard let self = self, e.kind == .keyDown, e.autorepeat == 0, e.synthetic == 0 else { return }
+            self.lock.lock()
+            self.pending.append(e.timestamp)
+            self.lock.unlock()
+        }
+        try tap.start()
+        drain.start()
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "thock.motion.eval"))
+        t.schedule(deadline: .now() + 0.05, repeating: 0.01)
+        t.setEventHandler { [weak self] in self?.evaluate() }
+        t.resume()
+        timer = t
+    }
+
+    func stop() {
+        timer?.cancel()
+        tap.stop()
+        drain.stop()
+        sensor.stop()
+    }
+
+    private func evaluate() {
+        let nowNs = Clock.nowNanos()
+        lock.lock()
+        let due = pending.filter { nowNs &- $0 > 40_000_000 }
+        pending.removeAll { nowNs &- $0 > 40_000_000 }
+        lock.unlock()
+        for eventNs in due {
+            let t = Clock.nanosToTicks(eventNs)
+            let ms = Clock.nanosToTicks(1_000_000)
+            let pre = sensor.ring.peak(from: t &- 20 * ms, to: t)
+            let post = sensor.ring.peak(from: t &+ 1, to: t &+ 20 * ms)
+            // Locate the overall max in 1 ms steps.
+            var bestOffset: Int64 = 0
+            var best: Float = -1
+            for step in -20...20 {
+                let a = step >= 0 ? t &+ UInt64(step) * ms : t &- UInt64(-step) * ms
+                let v = sensor.ring.peak(from: a, to: a &+ ms)
+                if v > best { best = v; bestOffset = Int64(step) * 1000 }
+            }
+            let force = velocity.force(eventNanos: eventNs, nowTicks: mach_absolute_time())
+            let hit = MotionHit(eventNanos: eventNs, prePeak: pre, postPeak: post, maxOffsetUs: bestOffset, force: force)
+            lock.lock()
+            hits.append(hit)
+            lock.unlock()
+            onHit?(hit)
+        }
+    }
+
+    var snapshot: [MotionHit] {
+        lock.lock()
+        defer { lock.unlock() }
+        return hits
+    }
+}
+
+func runDiagMotion() -> Int32 {
+    guard ensureListenPermission() else { return 2 }
+    guard MotionSensor.isAvailable() else {
+        stderrLine("diag-motion: no accelerometer on this Mac")
+        return 1
+    }
+    let capture = MotionCapture()
+    let t0 = Clock.nowNanos()
+    capture.onHit = { h in
+        let rel = Double(Int64(bitPattern: h.eventNanos) - Int64(bitPattern: t0)) / 1e9
+        print(String(format: "hit t=%8.3fs pre=%.4fg post=%.4fg max_at=%+.1fms force=%.2f gain_db=%.1f",
+                     rel, h.prePeak, h.postPeak, Double(h.maxOffsetUs) / 1000, h.force, VelocityEstimator.gainDb(force: h.force)))
+    }
+    do {
+        try capture.start()
+    } catch {
+        stderrLine("diag-motion: start failed: \(error)")
+        return 3
+    }
+    usleep(1_000_000)
+    stderrLine("diag-motion: sensor streaming (\(capture.sensor.reportCount)/s), noise floor \(String(format: "%.4f", capture.sensor.noiseFloor)) g. "
+        + "Type on the built-in keyboard; Ctrl-C for the summary. No key codes are logged.")
+
+    signal(SIGINT, SIG_IGN)
+    let sigint = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+    let started = Date()
+    sigint.setEventHandler {
+        capture.stop()
+        let hits = capture.snapshot
+        let secs = Date().timeIntervalSince(started)
+        let rate = Double(capture.sensor.reportCount) / secs
+        print(String(format: "diag-motion: reports=%d (%.0f/s) gaps=%d hits=%d noise=%.4fg",
+                     capture.sensor.reportCount, rate, capture.sensor.gapCount, hits.count, capture.sensor.noiseFloor))
+        if !hits.isEmpty {
+            let offsets = Percentiles(hits.map { $0.maxOffsetUs })
+            let inPre = hits.filter { $0.maxOffsetUs <= 0 }.count
+            let peaks = Percentiles(hits.map { Int64($0.prePeak.isNaN ? 0 : max($0.prePeak, $0.postPeak) * 10_000) })
+            let forces = Percentiles(hits.map { Int64($0.force * 100) })
+            print("diag-motion: max_offset_us \(offsets.description)   (negative = impact arrived before the key event)")
+            print("diag-motion: max in pre-window (usable without delay): \(inPre)/\(hits.count)")
+            print("diag-motion: peak (1e-4 g) \(peaks.description)")
+            print("diag-motion: force (%) \(forces.description)")
+        }
+        exit(0)
+    }
+    sigint.resume()
+    dispatchMain()
+}
+
+/// Interactive: 10 light hits, then 10 hard hits; PASS if the hard median is
+/// at least twice the light median and the two groups do not overlap much.
+func runMotionSelftest(hitsPerGroup n: Int = 10) -> Int32 {
+    guard ensureListenPermission() else { return 2 }
+    guard MotionSensor.isAvailable() else {
+        print("motion-selftest: FAIL — no accelerometer on this Mac")
+        return 1
+    }
+    let capture = MotionCapture()
+    do {
+        try capture.start()
+    } catch {
+        stderrLine("motion-selftest: start failed: \(error)")
+        return 3
+    }
+    usleep(500_000)
+
+    func collect(_ count: Int, prompt: String) -> [Float] {
+        let before = capture.snapshot.count
+        stderrLine(prompt)
+        var lastShown = 0
+        while capture.snapshot.count < before + count {
+            let have = capture.snapshot.count - before
+            if have != lastShown {
+                lastShown = have
+                stderrLine("  \(have)/\(count)")
+            }
+            usleep(50_000)
+        }
+        stderrLine("  \(count)/\(count) ✓")
+        return capture.snapshot[before..<(before + count)].map { max($0.prePeak, $0.postPeak) }
+    }
+
+    let light = collect(n, prompt: "motion-selftest: tap any letter key \(n) times LIGHTLY (as softly as you can).")
+    usleep(700_000)
+    let hard = collect(n, prompt: "motion-selftest: now hit a letter key \(n) times HARD.")
+    capture.stop()
+
+    func median(_ v: [Float]) -> Float { let s = v.sorted(); return s[s.count / 2] }
+    func pct(_ v: [Float], _ p: Double) -> Float { let s = v.sorted(); return s[min(s.count - 1, Int(Double(s.count) * p))] }
+    let ml = median(light), mh = median(hard)
+    let ratio = ml > 0 ? mh / ml : Float.infinity
+    let overlapFree = pct(light, 0.75) < pct(hard, 0.25)
+    print(String(format: "motion-selftest: light median=%.4fg (p25=%.4f p75=%.4f)  hard median=%.4fg (p25=%.4f p75=%.4f)  ratio=%.2f",
+                 ml, pct(light, 0.25), pct(light, 0.75), mh, pct(hard, 0.25), pct(hard, 0.75), ratio))
+    var failures: [String] = []
+    if ratio < 2 { failures.append("hard/light ratio \(String(format: "%.2f", ratio)) < 2") }
+    if !overlapFree { failures.append("light p75 >= hard p25 — groups overlap") }
+    if failures.isEmpty {
+        print("motion-selftest: PASS")
+        return 0
+    }
+    for f in failures { print("motion-selftest: FAIL — \(f)") }
+    return 1
 }
 
 // MARK: - --selftest
@@ -624,7 +835,7 @@ func runSelftest(_ opt: SelftestOptions) -> Int32 {
             limit = Int(Double(dtNs) / 1e9 * audio.format.sampleRate * Double(c.rate))
             if limit < Int(buffer.frameLength) { stolen += 1 }
         }
-        expectedEnergy += energy(of: buffer, upTo: limit)
+        expectedEnergy += energy(of: buffer, upTo: limit) * Double(c.gain * c.gain)
     }
     let energyRatio = expectedEnergy > 0 ? probe.energy / expectedEnergy : 0
     let expectedVoices = opt.count * soundsPerPress

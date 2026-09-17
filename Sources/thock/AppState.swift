@@ -11,6 +11,8 @@ final class AppState: ObservableObject {
         static let volume = "volume"
         static let keyUp = "keyup"
         static let enabled = "enabled"
+        static let velocity = "velocity"
+        static let sensitivity = "sensitivity"
     }
 
     @Published var packs: [Resources.PackEntry] = []
@@ -40,6 +42,23 @@ final class AppState: ObservableObject {
             queue.async { [weak self] in self?.pipeline?.muted = !(self?.enabled ?? true) }
         }
     }
+    /// Velocity from the accelerometer (only meaningful when a sensor exists).
+    @Published var velocityEnabled: Bool {
+        didSet {
+            defaults.set(velocityEnabled, forKey: Keys.velocity)
+            queue.async { [weak self] in self?.pipeline?.velocity.enabled = self?.velocityEnabled ?? true }
+        }
+    }
+    /// Slider 0…1 → sensitivity 0.3…3 (log scale, 0.5 ≈ 1).
+    @Published var sensitivitySlider: Double {
+        didSet {
+            defaults.set(sensitivitySlider, forKey: Keys.sensitivity)
+            let value = Float(0.3 * pow(10, sensitivitySlider))
+            queue.async { [weak self] in self?.pipeline?.velocity.sensitivity = value }
+        }
+    }
+    let sensorAvailable = MotionSensor.isAvailable()
+    @Published var sensorStatus = ""
     @Published var permissionGranted = false
     @Published var running = false
     @Published var status = "Startet …"
@@ -52,6 +71,7 @@ final class AppState: ObservableObject {
     private var audio: AudioEngine?
     private var pipeline: Pipeline?
     private var drain: Drain?
+    private var motion: MotionSensor?
     private var stats = DiagStats()
     private var permissionTimer: Timer?
     private var permissionRequested = false
@@ -65,6 +85,8 @@ final class AppState: ObservableObject {
         launchAtLogin = SMAppService.mainApp.status == .enabled
         keyUpSounds = defaults.object(forKey: Keys.keyUp) as? Bool ?? true
         enabled = defaults.object(forKey: Keys.enabled) as? Bool ?? true
+        velocityEnabled = defaults.object(forKey: Keys.velocity) as? Bool ?? true
+        sensitivitySlider = defaults.object(forKey: Keys.sensitivity) as? Double ?? 0.5
     }
 
     // MARK: lifecycle
@@ -80,7 +102,7 @@ final class AppState: ObservableObject {
 
     func stop() {
         queue.sync {
-            teardown()
+            teardownAll()
         }
     }
 
@@ -94,6 +116,9 @@ final class AppState: ObservableObject {
         }
         if let a = audio {
             s += " voices_started=\(a.mixer.voicesStarted) overloads=\(a.overloadCount)"
+        }
+        if let m = motion {
+            s += " motion_reports=\(m.reportCount) gaps=\(m.gapCount)"
         }
         return s
     }
@@ -149,9 +174,24 @@ final class AppState: ObservableObject {
                 return
             }
             audio.engine.mainMixerNode.outputVolume = volume
-            let pipeline = Pipeline(audio: audio, pack: pack)
+            var sensorText = "Kein Sensor in diesem Mac — feste Lautstärke."
+            if sensorAvailable {
+                if motion == nil {
+                    let m = MotionSensor()
+                    do {
+                        try m.start()
+                        motion = m
+                    } catch {
+                        stderrLine("thock: accelerometer start failed: \(error)")
+                    }
+                }
+                sensorText = motion != nil ? "Beschleunigungssensor aktiv." : "Sensor vorhanden, aber nicht lesbar — feste Lautstärke."
+            }
+            let pipeline = Pipeline(audio: audio, pack: pack, motion: motion)
             pipeline.keyUpSounds = keyUpSounds
             pipeline.muted = !enabled
+            pipeline.velocity.enabled = velocityEnabled
+            pipeline.velocity.sensitivity = Float(0.3 * pow(10, sensitivitySlider))
             let stats = DiagStats()
             let verbose = self.verbose
             let drain = Drain(ring: pipeline.logRing) { e in
@@ -176,12 +216,16 @@ final class AppState: ObservableObject {
             stderrLine("thock: running. \(describe(audio.deviceInfo())) voices=\(VoiceMixer.voiceCount)")
             stderrLine("thock: \(info)")
             let hasKeyUp = pack.hasKeyUp
+            stderrLine("thock: velocity " + (motion != nil ? "on (accelerometer)" : "off (no sensor)"))
             publish(status: "Aktiv — \(pack.name)", running: true, packInfo: info)
-            DispatchQueue.main.async { self.packHasKeyUp = hasKeyUp }
+            DispatchQueue.main.async {
+                self.packHasKeyUp = hasKeyUp
+                self.sensorStatus = sensorText
+            }
         }
     }
 
-    /// Must run on `queue`.
+    /// Must run on `queue`. The sensor stays open across pack switches.
     private func teardown() {
         pipeline?.stop()
         drain?.stop()
@@ -189,6 +233,12 @@ final class AppState: ObservableObject {
         pipeline = nil
         drain = nil
         audio = nil
+    }
+
+    private func teardownAll() {
+        teardown()
+        motion?.stop()
+        motion = nil
     }
 
     private func switchPack(to id: String) {

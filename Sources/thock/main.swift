@@ -18,6 +18,8 @@ enum Mode {
     case listPacks
     case map
     case autostart
+    case diagMotion
+    case motionSelftest
 }
 
 var mode: Mode = .app
@@ -33,6 +35,7 @@ var packName: String?
 let defaultPack = "topre-purple-hybrid-pbt"
 var ioFrames: UInt32 = 128
 var jitter: Float = 0.03
+var velocity = true
 
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
@@ -46,6 +49,12 @@ while !args.isEmpty {
         verbose = true
     case "--diag":
         mode = .diag
+    case "--diag-motion":
+        mode = .diagMotion
+    case "--motion-selftest":
+        mode = .motionSelftest
+    case "--no-velocity":
+        velocity = false
     case "--all":
         printAll = true
     case "--selftest":
@@ -168,6 +177,10 @@ case .help:
                             latency and prove render per voice; exit 0/1
         --count N           keystrokes (default 50)
         --burst N           N keystrokes 10 ms apart instead (implies --selftest)
+      --diag-motion         accelerometer vs. key events: timing and force per
+                            keystroke (no key codes logged); Ctrl-C = summary
+      --motion-selftest     10 light + 10 hard hits, PASS if clearly separated
+      --no-velocity         ignore the accelerometer (fixed loudness)
       --selftest-tap        capture-only self-test, no audio; exit 0/1
         --count N           keystrokes per burst (default 20)
         --idle S            seconds between the two bursts (default 60)
@@ -186,9 +199,13 @@ case .help:
 case .app:
     runApp(verbose: verbose, bufferFrames: ioFrames)
 case .run:
-    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: nil))
+    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, velocity: velocity, log: nil))
 case .diag:
-    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, log: printAll ? .all : .keyDown))
+    exit(runMain(resolvePack(), bufferFrames: ioFrames, jitter: jitter, velocity: velocity, log: printAll ? .all : .keyDown))
+case .diagMotion:
+    exit(runDiagMotion())
+case .motionSelftest:
+    exit(runMotionSelftest(hitsPerGroup: count ?? 10))
 case .autostart:
     exit(runAutostart(autostartArg))
 case .listPacks:

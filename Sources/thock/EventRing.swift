@@ -32,6 +32,10 @@ struct KeyEvent {
     var scan: Int32 = -1
     /// Sample index that was triggered, -1 if nothing was played.
     var sample: Int32 = -1
+    /// Keystroke force 0…1 from the accelerometer (1 without sensor).
+    var force: Float = 1
+    /// Gain applied to the voice, in dB.
+    var gainDb: Float = 0
 }
 
 /// Single-producer / single-consumer ring buffer with fixed capacity.
