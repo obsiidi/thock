@@ -441,7 +441,10 @@ final class MotionCapture {
         try sensor.start()
         tap = KeyTap(ring: ring)
         drain = Drain(ring: ring) { [weak self] e in
-            guard let self = self, e.kind == .keyDown, e.autorepeat == 0, e.synthetic == 0 else { return }
+            // Letters and space only: modifiers, backspace and enter are
+            // hit differently and would blur the light/hard comparison.
+            guard let self = self, e.kind == .keyDown, e.autorepeat == 0, e.synthetic == 0,
+                  MotionCapture.isLetterOrSpace(Int(e.keyCode)) else { return }
             self.lock.lock()
             self.pending.append(e.timestamp)
             self.lock.unlock()
@@ -494,6 +497,12 @@ final class MotionCapture {
         lock.lock()
         defer { lock.unlock() }
         return hits
+    }
+
+    static func isLetterOrSpace(_ keyCode: Int) -> Bool {
+        let letters: Set<Int> = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17,
+                                 31, 32, 34, 35, 37, 38, 40, 45, 46, 49]
+        return letters.contains(keyCode)
     }
 }
 

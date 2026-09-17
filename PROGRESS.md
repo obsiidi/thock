@@ -274,10 +274,29 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   Links zeigen auf `mauriceberthold/thock`. `Tools/serve-site.sh` für lokale
   Vorschau.
 
-## Offene Punkte
-- Motion: echte Anschläge noch nicht gemessen (`--diag-motion` sammelt).
-- GitHub-Repo und Vercel-Projekt legt der Entwickler an; Impressum ausfüllen.
-- `tapDisabledByUserInput` sporadisch, Re-Enable greift.
+## Phase 9 — Beta-Kit ✅
+`docs/beta/`: Erfolgskriterien, Einladungstext, Fragebogen, Zeitplan.
+
+## Stand MVP 0.6.0 (2026-09-17)
+Alles gebaut, was ohne den Entwickler geht. `dist/thock-0.6.0.dmg` liegt
+bereit (nicht committet, `dist/` ist ignoriert). Abnahmen: Build 0
+Warnungen (debug mit `-warnings-as-errors`, release), `--selftest`
+spaced/burst, `--selftest-tap`, `--map`, Onboarding- und Popover-Elemente per
+Accessibility geprüft, Website im Browser geprüft, DMG gemountet und
+Signatur verifiziert.
+
+## Offene Punkte — nur der Entwickler kann das
+1. **Motion-Selftest tippen** (10× leicht, 10× fest) und einige Minuten
+   normal tippen, damit Fenster und Kraft-Skala an echten Anschlägen geprüft
+   werden. Bisher nur synthetische Events gesehen.
+2. **GitHub-Repo `mauriceberthold/thock`** anlegen (public, leer) und pushen;
+   dann `git tag v0.6.0`, Release anlegen, DMG + `.sha256` hochladen. Danach
+   funktionieren Update-Check, CI und der Homebrew-Tap (`homebrew-thock`
+   mit `Tools/homebrew/thock.rb`, sha256 eintragen).
+3. **Vercel-Projekt** anlegen: Repo importieren, Root `site/`, Preset Other.
+4. **Impressum** in `site/imprint.html` ausfüllen (Adresse, E-Mail).
+5. Optional: Developer ID (99 $/Jahr) — `THOCK_IDENTITY`/`THOCK_NOTARIZE`
+   in `Tools/bundle.sh` sind vorbereitet.
 
 ## Nächster Schritt
-Phase 9 — Beta-Kit (`docs/beta/`).
+Beta starten (docs/beta/README.md), Feedback in Issues sammeln.
