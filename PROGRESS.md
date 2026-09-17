@@ -247,13 +247,27 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   geprüft.
 - Version 0.6.0.
 
+## Phase 7 — Repo, Release, Homebrew ✅
+- `LICENSE` (MIT), `THIRD_PARTY.md` (Herkunft und Lizenz jedes Packs),
+  `README.md` (Englisch: Install mit Sequoia-Weg, `xattr`, Homebrew,
+  Requirements, Privacy, Build, Diagnose-CLI, Credits). `PROMPT.md` entfernt.
+- `Tools/release.sh`: Bundle → `dist/thock-<version>.dmg` (hdiutil, mit
+  Applications-Link und Read-me) + `.sha256`. Geprüft: Signatur im DMG gültig,
+  universal, `spctl` lehnt ab (nicht notarisiert — erwartet, README erklärt
+  „Open Anyway").
+- `Tools/bundle.sh`: Developer-ID-Tür — Identität „Developer ID Application…"
+  → hardened runtime + timestamp; `THOCK_NOTARIZE=1` → `notarytool` +
+  `stapler`. Nicht benutzt, nur vorbereitet.
+- `.github/workflows/build.yml`: Debug mit `-warnings-as-errors`, Release,
+  Smoke (`--help`, Exit 64), Bundle als Artifact. Läuft erst, wenn das Repo
+  auf GitHub liegt.
+- `Tools/homebrew/thock.rb`: Cask-Vorlage für ein Tap-Repo `homebrew-thock`.
+
 ## Offene Punkte
-- Motion: echte Anschläge noch nicht gemessen (`--diag-motion` sammelt im
-  Hintergrund; bisher nur synthetische Escape-Events ≈ Rauschen).
-- Sensor-Report-Intervall bleibt nach Stop auf 1000 µs (absichtlich).
+- Motion: echte Anschläge noch nicht gemessen (`--diag-motion` sammelt).
+- GitHub-Repo existiert noch nicht → Update-Check liefert 404 (still), CI
+  läuft nicht, Homebrew-Tap fehlt. Nur der Entwickler kann das Repo anlegen.
 - `tapDisabledByUserInput` sporadisch, Re-Enable greift.
 
 ## Nächster Schritt
-Phase 7 — Repo, Release, Homebrew: LICENSE, THIRD_PARTY, README,
-`Tools/release.sh` (DMG), GitHub-Actions-Build, Cask-Vorlage,
-Developer-ID-Schalter.
+Phase 8 — Website (`site/`, statisch, Vercel).

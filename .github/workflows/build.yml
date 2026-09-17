@@ -1,0 +1,28 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build (debug, warnings are errors)
+        run: swift build -Xswiftc -warnings-as-errors 2>&1 | tail -20
+      - name: Build (release)
+        run: swift build -c release 2>&1 | tail -5
+      - name: Smoke
+        run: |
+          .build/release/thock --help
+          .build/release/thock --bogus || test $? -eq 64
+      - name: Bundle (ad-hoc signed)
+        run: Tools/bundle.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thock.app
+          path: dist/thock.app
