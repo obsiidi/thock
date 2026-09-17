@@ -263,11 +263,21 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   auf GitHub liegt.
 - `Tools/homebrew/thock.rb`: Cask-Vorlage für ein Tap-Repo `homebrew-thock`.
 
+## Phase 8 — Website ✅
+- `site/`: `index.html` (Hero, drei Argumente, CSS-Nachbau des Popovers,
+  Install-Schritte für Sequoia, `xattr`/Homebrew-Alternative, Requirements,
+  Privacy, Credits, Feedback), `privacy.html`, `imprint.html` (Platzhalter
+  für Adresse/E-Mail — **vor Veröffentlichung ausfüllen**), `style.css`
+  (Systemschrift, hell/dunkel, keine Third-Party-Requests), `site/README.md`
+  mit Vercel-Anleitung (Root `site/`, Preset Other).
+- Geprüft im Browser: Desktop und 375 px ohne horizontales Scrollen, alle
+  Links zeigen auf `mauriceberthold/thock`. `Tools/serve-site.sh` für lokale
+  Vorschau.
+
 ## Offene Punkte
 - Motion: echte Anschläge noch nicht gemessen (`--diag-motion` sammelt).
-- GitHub-Repo existiert noch nicht → Update-Check liefert 404 (still), CI
-  läuft nicht, Homebrew-Tap fehlt. Nur der Entwickler kann das Repo anlegen.
+- GitHub-Repo und Vercel-Projekt legt der Entwickler an; Impressum ausfüllen.
 - `tapDisabledByUserInput` sporadisch, Re-Enable greift.
 
 ## Nächster Schritt
-Phase 8 — Website (`site/`, statisch, Vercel).
+Phase 9 — Beta-Kit (`docs/beta/`).

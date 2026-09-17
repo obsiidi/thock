@@ -4,3 +4,4 @@
 *.xcworkspace
 .DS_Store
 /dist/
+.claude/launch.json

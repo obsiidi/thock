@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>thock — mechanical keyboard sounds with key force, for Mac</title>
+<meta name="description" content="thock plays mechanical keyboard sounds on your Mac and follows how hard you type. Free, open source, no account.">
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="hero">
+  <img class="icon" src="icon.png" width="112" height="112" alt="">
+  <h1>thock</h1>
+  <p class="tagline">Mechanical keyboard sounds for your Mac — that follow how hard you type.</p>
+  <p class="cta">
+    <a class="button" href="https://github.com/mauriceberthold/thock/releases/latest">Download for macOS</a>
+    <a class="secondary" href="https://github.com/mauriceberthold/thock">Source on GitHub</a>
+  </p>
+  <p class="meta">Free · open source (MIT) · no account · macOS 13+ · Apple Silicon &amp; Intel</p>
+</header>
+
+<main>
+  <section class="features">
+    <div>
+      <h2>Key force</h2>
+      <p>MacBooks with a motion sensor feel each keystroke through the chassis. thock reads it ~800 times a second and plays firm hits louder and brighter, light taps softer and duller. Adjustable from soft to hard.</p>
+    </div>
+    <div>
+      <h2>Real recordings</h2>
+      <p>Seven packs included — Cherry MX Blue, Brown, Red and Black, Topre, Holy Pandas, NK Cream. Drop any <a href="https://mechvibes.com">Mechvibes</a> pack onto the window to add more.</p>
+    </div>
+    <div>
+      <h2>Out of the way</h2>
+      <p>Lives in the menu bar: one click for sound, volume, on/off. About 5 ms from keystroke to sound, under 1 % CPU, and nothing you type ever leaves your Mac.</p>
+    </div>
+  </section>
+
+  <section class="popover-demo" aria-label="What the menu bar popover looks like">
+    <div class="popover">
+      <div class="row head"><span>⌨︎ thock</span><span class="dot"></span><span class="switch on"></span></div>
+      <div class="row"><span>Sound</span><span class="select">Topre Purple Hybrid – PBT ▾</span><span class="plus">+</span></div>
+      <div class="row"><span>🔊</span><span class="slider"><i style="width:62%"></i></span><span class="pct">62 %</span></div>
+      <div class="row"><span>Key force</span><span class="switch on"></span></div>
+      <div class="row small"><span>soft</span><span class="slider"><i style="width:50%"></i></span><span>hard</span></div>
+      <div class="row"><span>Key-release sounds</span><span class="switch"></span></div>
+      <div class="row"><span>Launch at login</span><span class="switch on"></span></div>
+      <div class="row status">Active — Topre Purple Hybrid – PBT keycaps</div>
+      <div class="row foot"><span>v0.6.0 · Setup · Packs folder · Feedback</span><span class="quit">Quit</span></div>
+    </div>
+    <p class="caption">The whole app is this popover.</p>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p>thock is a free project and not notarized by Apple, so the first launch takes one extra step on macOS 15 and later. After that it just runs.</p>
+    <ol>
+      <li><a href="https://github.com/mauriceberthold/thock/releases/latest">Download</a> <code>thock-&lt;version&gt;.dmg</code>, open it and drag <strong>thock</strong> into <strong>Applications</strong>.</li>
+      <li>Open thock. macOS will say it "was not opened".</li>
+      <li>Go to <strong>System Settings › Privacy &amp; Security</strong>, scroll down, click <strong>Open Anyway</strong> next to thock and confirm with your password.</li>
+      <li>thock starts and shows a short setup window. Follow it to allow <strong>Input Monitoring</strong> — that is how it sees your key presses. If macOS offers to quit and reopen thock, accept.</li>
+    </ol>
+    <details>
+      <summary>Prefer the Terminal? Skip step 2–3.</summary>
+      <p>Remove the quarantine flag after copying the app:</p>
+      <pre><code>xattr -d com.apple.quarantine /Applications/thock.app</code></pre>
+      <p>Or, once the Homebrew tap is published:</p>
+      <pre><code>brew install --cask --no-quarantine mauriceberthold/thock/thock</code></pre>
+    </details>
+  </section>
+
+  <section id="requirements">
+    <h2>Requirements</h2>
+    <ul>
+      <li>macOS 13 Ventura or later, Apple Silicon or Intel.</li>
+      <li><strong>Key force</strong> needs the built-in motion sensor: MacBook Pro or Air with M1 Pro/Max or any M2 or later chip, typing on the built-in keyboard. On other Macs and external keyboards thock plays at a fixed loudness and tells you so.</li>
+    </ul>
+  </section>
+
+  <section id="privacy">
+    <h2>Privacy</h2>
+    <p>thock asks for <strong>Input Monitoring</strong> because that is the only way to hear key presses. It turns each press into a sound and nothing else: no keystrokes are stored, logged or transmitted. The motion sensor is read for impact strength only. The app makes a single, optional network request — asking GitHub whether a newer release exists. There is no account, no analytics, no telemetry. <a href="privacy.html">Full privacy notice</a>.</p>
+  </section>
+
+  <section id="credits">
+    <h2>Credits</h2>
+    <p>The sound recordings come from the <a href="https://github.com/hainguyents13/mechvibes">Mechvibes</a> community and <a href="https://github.com/tplai/kbsim">kbsim</a> (MIT) — see <a href="https://github.com/mauriceberthold/thock/blob/main/THIRD_PARTY.md">THIRD_PARTY.md</a>. Inspired by <a href="https://www.haptyk.com/">Haptyk</a> and <a href="https://github.com/kamillobinski/thock">Thock</a>.</p>
+  </section>
+
+  <section id="feedback">
+    <h2>Feedback</h2>
+    <p>Something broken, a pack that doesn't load, a Mac that should have key force but doesn't? <a href="https://github.com/mauriceberthold/thock/issues">Open an issue</a>.</p>
+  </section>
+</main>
+
+<footer>
+  <p>MIT © 2026 Maurice Berthold · <a href="privacy.html">Privacy</a> · <a href="imprint.html">Imprint</a> · <a href="https://github.com/mauriceberthold/thock">GitHub</a></p>
+</footer>
+</body>
+</html>

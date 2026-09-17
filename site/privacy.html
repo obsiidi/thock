@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — thock</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main>
+  <section>
+    <p><a href="index.html">← thock</a></p>
+    <h1>Privacy notice</h1>
+
+    <h2>The app</h2>
+    <p>thock runs entirely on your Mac. It does not collect, store or transmit personal data.</p>
+    <ul>
+      <li><strong>Keyboard input.</strong> thock uses the macOS Input Monitoring permission to be notified of key presses. Each press is turned into a sound and then discarded. No keystrokes, text, window titles or clipboard contents are recorded. The optional diagnostics mode of the command-line tool (<code>--diag</code>) prints key names to your own terminal only when you run it yourself.</li>
+      <li><strong>Motion sensor.</strong> On supported MacBooks thock reads the built-in accelerometer to estimate how hard a key was hit. The readings are used immediately and not stored.</li>
+      <li><strong>Network.</strong> The only network request thock makes is an optional check for new versions: once per launch it asks <code>api.github.com</code> for the latest release of the thock repository. GitHub receives your IP address as with any web request; see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. No other data is sent.</li>
+      <li><strong>Settings.</strong> Your preferences (chosen pack, volume, switches) are stored locally in <code>~/Library/Preferences/com.mauriceberthold.thock.plist</code>. Imported packs are stored in <code>~/Library/Application Support/thock/packs</code>.</li>
+      <li><strong>No account, no analytics, no telemetry, no crash reporting.</strong></li>
+    </ul>
+
+    <h2>This website</h2>
+    <p>This site is static and sets no cookies and loads no third-party scripts, fonts or trackers. It is hosted by Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA. When you open the site, Vercel's servers process the technical data of your request (IP address, time, requested page, browser identification) to deliver the page and keep the service secure; see <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>. Downloads are served by GitHub.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about privacy: see the <a href="imprint.html">imprint</a>.</p>
+  </section>
+</main>
+<footer>
+  <p>MIT © 2026 Maurice Berthold · <a href="privacy.html">Privacy</a> · <a href="imprint.html">Imprint</a> · <a href="https://github.com/mauriceberthold/thock">GitHub</a></p>
+</footer>
+</body>
+</html>
