@@ -108,11 +108,3 @@ thock --help
 (`AppleSPUHIDDevice`, ~800 Hz) feeds a second ring; on each key-down the
 peak around the event becomes a force that sets gain, low-pass and pitch.
 Details and measurements in `PROGRESS.md` (German).
-
-## Credits
-
-Sound recordings are from the Mechvibes community — see `THIRD_PARTY.md`.
-Inspired by [Haptyk](https://www.haptyk.com/) (force-sensitive, paid) and
-[Thock](https://github.com/kamillobinski/thock) (free, open source).
-
-MIT © 2026 Maurice Berthold
