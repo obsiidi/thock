@@ -285,18 +285,26 @@ spaced/burst, `--selftest-tap`, `--map`, Onboarding- und Popover-Elemente per
 Accessibility geprüft, Website im Browser geprüft, DMG gemountet und
 Signatur verifiziert.
 
+## Veröffentlicht (2026-09-19)
+- Repo: https://github.com/obsiidi/thock (public, main). Commit-E-Mails auf
+  die GitHub-Noreply-Adresse umgeschrieben. Push/Release über `gh`
+  (Homebrew, `gh auth login`); git nutzt `gh auth git-credential`.
+- Release v0.6.0 mit `thock-0.6.0.dmg` + `.sha256`, als „latest" markiert
+  (Pre-Release-Flag entfernt, sonst liefert `/releases/latest` 404 und der
+  Update-Check sieht nichts). Update-Logik gegen das Live-Release geprüft:
+  0.6.0 → kein Hinweis, 0.5.0 → Hinweis.
+- CI (GitHub Actions, macos-latest): erster Lauf grün.
+- `Tools/homebrew/thock.rb` trägt die echte sha256.
+
 ## Offene Punkte — nur der Entwickler kann das
-1. **Motion-Selftest tippen** (10× leicht, 10× fest) und einige Minuten
-   normal tippen, damit Fenster und Kraft-Skala an echten Anschlägen geprüft
-   werden. Bisher nur synthetische Events gesehen.
-2. **GitHub-Repo `obsiidi/thock`** anlegen (public, leer) und pushen;
-   dann `git tag v0.6.0`, Release anlegen, DMG + `.sha256` hochladen. Danach
-   funktionieren Update-Check, CI und der Homebrew-Tap (`homebrew-thock`
-   mit `Tools/homebrew/thock.rb`, sha256 eintragen).
-3. **Vercel-Projekt** anlegen: Repo importieren, Root `site/`, Preset Other.
-4. **Impressum** in `site/imprint.html` ausfüllen (Adresse, E-Mail).
-5. Optional: Developer ID (99 $/Jahr) — `THOCK_IDENTITY`/`THOCK_NOTARIZE`
-   in `Tools/bundle.sh` sind vorbereitet.
+1. **Motion-Selftest** bewusst tippen (10× leicht, 10× fest) — der erste Lauf
+   hat normales Tippen erwischt (ungültig). Befund: normales Tippen
+   0,005–0,011 g, Rauschen 0,0005 g.
+2. **Vercel-Projekt** anlegen: Repo importieren, Root `site/`, Preset Other.
+3. **Impressum** in `site/imprint.html` ausfüllen (Adresse, E-Mail).
+4. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
+   `Casks/thock.rb` = `Tools/homebrew/thock.rb`.
+5. Optional: Developer ID (99 $/Jahr) — Schalter in `Tools/bundle.sh`.
 
 ## Nächster Schritt
 Beta starten (docs/beta/README.md), Feedback in Issues sammeln.
