@@ -7,7 +7,7 @@
 #      --no-quarantine skips Gatekeeper for the unnotarized app.
 cask "thock" do
   version "0.6.1"
-  sha256 "48e413434cc71eeb83390e5a21684403d1f0c4b59216b29632bf5e3859607122"
+  sha256 "df648e4c46e1530bb8350653a4d90943df0771e15a33f609c6ce5c4256f0e553"
 
   url "https://github.com/obsiidi/thock/releases/download/v#{version}/thock-#{version}.dmg"
   name "thock"
