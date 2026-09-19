@@ -9,7 +9,7 @@ final class UpdateChecker {
         let url: URL
     }
 
-    static let repository = "mauriceberthold/thock"
+    static let repository = "obsiidi/thock"
     static var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
     }

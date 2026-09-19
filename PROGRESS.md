@@ -237,7 +237,7 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   Probe-Laden, Auswahl wechselt sofort. `Resources.allPackEntries()` mischt
   Bundle- und Nutzer-Packs (Nutzer gewinnt bei Namensgleichheit).
 - `UpdateChecker.swift`: einmal pro Start, 5 s nach Launch, GitHub
-  Releases-API (`mauriceberthold/thock`), Hinweis + Link im Popover; still bei
+  Releases-API (`obsiidi/thock`), Hinweis + Link im Popover; still bei
   Fehlern. Einzige Netzverbindung der App.
 - Universal Binary: zwei Builds (`--triple`) + `lipo` in `bundle.sh`
   (xcbuild fehlt ohne Xcode, `--arch a --arch b` geht nicht).
@@ -271,7 +271,7 @@ Rückfrage. Plan: `~/.claude/plans/schreibe-kein-code-bis-curried-valley.md`.
   (Systemschrift, hell/dunkel, keine Third-Party-Requests), `site/README.md`
   mit Vercel-Anleitung (Root `site/`, Preset Other).
 - Geprüft im Browser: Desktop und 375 px ohne horizontales Scrollen, alle
-  Links zeigen auf `mauriceberthold/thock`. `Tools/serve-site.sh` für lokale
+  Links zeigen auf `obsiidi/thock`. `Tools/serve-site.sh` für lokale
   Vorschau.
 
 ## Phase 9 — Beta-Kit ✅
@@ -289,7 +289,7 @@ Signatur verifiziert.
 1. **Motion-Selftest tippen** (10× leicht, 10× fest) und einige Minuten
    normal tippen, damit Fenster und Kraft-Skala an echten Anschlägen geprüft
    werden. Bisher nur synthetische Events gesehen.
-2. **GitHub-Repo `mauriceberthold/thock`** anlegen (public, leer) und pushen;
+2. **GitHub-Repo `obsiidi/thock`** anlegen (public, leer) und pushen;
    dann `git tag v0.6.0`, Release anlegen, DMG + `.sha256` hochladen. Danach
    funktionieren Update-Check, CI und der Homebrew-Tap (`homebrew-thock`
    mit `Tools/homebrew/thock.rb`, sha256 eintragen).

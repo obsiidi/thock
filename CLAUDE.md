@@ -1,8 +1,9 @@
 # thock
 
-macOS-Menüleisten-App: spielt mechanische Tastaturgeräusche beim Tippen auf der
-eingebauten MacBook-Tastatur. Rein privat, läuft nur auf dem Mac des Entwicklers.
-Keine Veröffentlichung, kein Vertrieb, kein App Store.
+macOS-Menüleisten-App: spielt mechanische Tastaturgeräusche beim Tippen und
+folgt auf MacBooks mit Bewegungssensor der Anschlagstärke. Open Source (MIT),
+kostenlos, kein App Store. Repo: github.com/obsiidi/thock. Seit 2026-09-17
+MVP für eine Closed Beta; Hintergrund und Entscheidungen in PROGRESS.md.
 
 ---
 

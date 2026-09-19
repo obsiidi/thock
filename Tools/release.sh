@@ -24,7 +24,7 @@ thock $VERSION
    Privacy & Security > Open Anyway (one time).
 3. Follow the setup window to allow Input Monitoring.
 
-Free and open source: https://github.com/mauriceberthold/thock
+Free and open source: https://github.com/obsiidi/thock
 TXT
 
 hdiutil create -volname "thock $VERSION" -srcfolder "$STAGE" -ov -format UDZO -quiet "$DMG"

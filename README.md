@@ -21,7 +21,7 @@ for light ones.
 ## Install
 
 Download the latest `thock-<version>.dmg` from
-[Releases](https://github.com/mauriceberthold/thock/releases), open it and
+[Releases](https://github.com/obsiidi/thock/releases), open it and
 drag **thock** into **Applications**.
 
 thock is not notarized by Apple (that costs $99 a year; this is a free
@@ -48,7 +48,7 @@ xattr -d com.apple.quarantine /Applications/thock.app
 Or install with Homebrew (once the tap exists — see `Tools/homebrew/`):
 
 ```bash
-brew install --cask --no-quarantine mauriceberthold/thock/thock
+brew install --cask --no-quarantine obsiidi/thock/thock
 ```
 
 ## Requirements

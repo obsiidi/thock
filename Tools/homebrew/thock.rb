@@ -3,16 +3,16 @@
 #   2. Put this file at Casks/thock.rb, fill in version and sha256 from
 #      Tools/release.sh output (dist/thock-<version>.dmg.sha256).
 #   3. Users install with:
-#        brew install --cask --no-quarantine mauriceberthold/thock/thock
+#        brew install --cask --no-quarantine obsiidi/thock/thock
 #      --no-quarantine skips Gatekeeper for the unnotarized app.
 cask "thock" do
   version "0.6.0"
   sha256 "REPLACE_WITH_SHA256_FROM_RELEASE"
 
-  url "https://github.com/mauriceberthold/thock/releases/download/v#{version}/thock-#{version}.dmg"
+  url "https://github.com/obsiidi/thock/releases/download/v#{version}/thock-#{version}.dmg"
   name "thock"
   desc "Mechanical keyboard sounds with key force, in the menu bar"
-  homepage "https://github.com/mauriceberthold/thock"
+  homepage "https://github.com/obsiidi/thock"
 
   depends_on macos: ">= :ventura"
 

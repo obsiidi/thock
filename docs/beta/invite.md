@@ -18,7 +18,7 @@ The two things I want to know:
 2. When you type lightly and then hard — do you clearly hear the difference?
 
 Anything else — annoying, boring, broken — is gold too. Reply here or open
-an issue: https://github.com/mauriceberthold/thock/issues
+an issue: https://github.com/obsiidi/thock/issues
 
 Please try it for a week or two. I'll send five short questions around
 [DEADLINE]. Thanks!
