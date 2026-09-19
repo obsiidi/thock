@@ -23,4 +23,4 @@ an issue: https://github.com/obsiidi/thock/issues
 Please try it for a week or two. I'll send five short questions around
 [DEADLINE]. Thanks!
 
-Maurice
+Obsidi

@@ -10,9 +10,7 @@ Static HTML/CSS, no build step, no third-party requests.
    command, output directory `.` (leave empty).
 4. Deploy. The site is live at `<project>.vercel.app`.
 
-Every push to `main` redeploys. Before sharing publicly, fill in
-`imprint.html` (address, e-mail) — it is legally required in Germany once
-the site is public.
+Every push to `main` redeploys.
 
 ## Local preview
 

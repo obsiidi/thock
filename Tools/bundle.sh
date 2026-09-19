@@ -13,7 +13,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 IDENTITY="${THOCK_IDENTITY:-thock-dev}"
-BUNDLE_ID="com.mauriceberthold.thock"
+BUNDLE_ID="com.obsidi.thock"
 APP="dist/thock.app"
 
 # Universal binary: one build per architecture, joined with lipo.

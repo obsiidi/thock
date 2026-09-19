@@ -160,11 +160,11 @@ Abgenommen am 2026-09-12.
 - **Signatur:** selbstsigniertes Zertifikat `thock-dev` im Login-Schlüsselbund,
   per `Tools/make-cert.sh` angelegt (openssl + `security import` +
   `add-trusted-cert`, kostenlos). Designated Requirement =
-  `identifier "com.mauriceberthold.thock" and certificate leaf = H"d5cd…"` —
+  `identifier "com.obsidi.thock" and certificate leaf = H"d5cd…"` —
   Rebuild-stabil, **bewiesen**: nach Rebuild + Relaunch sofort `running`.
 - **TCC-Falle, erlebt:** Ein Eintrag aus der Ad-hoc-Zeit blockiert die signierte
   App still (gemerkter cdhash passt nicht, Schalter an/aus hilft nicht). Lösung:
-  `tccutil reset ListenEvent com.mauriceberthold.thock`, App neu starten,
+  `tccutil reset ListenEvent com.obsidi.thock`, App neu starten,
   einmal freigeben. Beim Umschalten in den Systemeinstellungen relauncht macOS
   die App („Beenden und erneut öffnen") — dann ohne Log-Umleitung.
 - `App.swift`: `NSStatusItem` (SF-Symbol `keyboard`), `NSPopover .transient`
@@ -295,6 +295,14 @@ Signatur verifiziert.
   0.6.0 → kein Hinweis, 0.5.0 → Hinweis.
 - CI (GitHub Actions, macos-latest): erster Lauf grün.
 - `Tools/homebrew/thock.rb` trägt die echte sha256.
+
+## Umbenennung (2026-09-19)
+Auf Wunsch des Entwicklers (Privatsphäre): Klarname überall durch „Obsidi"
+ersetzt — LICENSE, Website, Commit-Autor (Historie neu geschrieben),
+Bundle-ID auf **`com.obsidi.thock`** geändert (neue
+TCC-Identität: Eingabeüberwachung einmal neu erteilen; Einstellungen unter
+der alten Domain verfallen). Kein Impressum (Entscheidung des Entwicklers,
+Rechtslage bekannt). Release 0.6.0 gelöscht, ersetzt durch **0.6.1**.
 
 ## Offene Punkte — nur der Entwickler kann das
 1. **Motion-Selftest** bewusst tippen (10× leicht, 10× fest) — der erste Lauf

@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>thock</string>
     <key>CFBundleIdentifier</key>
-    <string>com.mauriceberthold.thock</string>
+    <string>com.obsidi.thock</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
@@ -17,9 +17,9 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.6.0</string>
+    <string>0.6.1</string>
     <key>CFBundleVersion</key>
-    <string>6</string>
+    <string>7</string>
     <key>CFBundleIconFile</key>
     <string>thock</string>
     <key>LSMinimumSystemVersion</key>
