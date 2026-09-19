@@ -3,7 +3,7 @@
   "name": "CherryMX Red - ABS keycaps",
   "key_define_type": "single",
   "includes_numpad": false,
-  "sound": "sound.ogg",
+  "sound": "sound.flac",
   "defines": {
     "1": [
       2464,

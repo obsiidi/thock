@@ -151,7 +151,7 @@ final class VoiceMixer {
     /// Registers a decoded buffer (must be in the mixer's format, float32
     /// non-interleaved). Call before the engine starts. Returns the index.
     func register(_ buffer: AVAudioPCMBuffer) -> Int32 {
-        precondition(buffers.count < VoiceMixer.maxSamples, "sample table full")
+        guard buffers.count < VoiceMixer.maxSamples else { return -1 }   // table full: key falls back
         guard let data = buffer.floatChannelData, buffer.frameLength > 1 else { return -1 }
         let index = buffers.count
         buffers.append(buffer)

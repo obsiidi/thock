@@ -13,6 +13,10 @@ recordings made by other people and ship under their own terms:
 | `packs/nk-cream` | NK Cream (original by Ryan) | same | MIT |
 | `packs/holy-pandas` | Holy Pandas | [tplai/kbsim](https://github.com/tplai/kbsim) via Mechvibes | MIT, Copyright (c) Thomas Lai (`packs/holy-pandas/LICENSE`) |
 
+The five single-file packs were converted from the upstream `sound.ogg` to
+FLAC (lossless from the decoded Vorbis, 16-bit) so they load on every
+supported macOS version; the slice tables in `config.json` are unchanged.
+
 The pack format (`config.json` with Windows/libuiohook key codes) is the
 [Mechvibes](https://mechvibes.com) format; thock reads it but is not
 affiliated with Mechvibes.

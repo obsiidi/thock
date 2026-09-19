@@ -7,11 +7,11 @@ else sees it. It's called thock: it plays mechanical keyboard sounds while
 you type — and on newer MacBooks it hears how hard you hit the keys and
 plays harder hits louder. Free, open source, no account.
 
-Download: [LINK TO DMG]
+Download: https://github.com/obsiidi/thock/releases/latest
 
 It's not signed by Apple (that costs money, and this is a hobby), so the
 first launch needs one extra step — the page explains it in four steps:
-[LINK TO WEBSITE]
+https://thock-ecru.vercel.app
 
 The two things I want to know:
 1. Did you get it running without asking me? If not, where did you get stuck?

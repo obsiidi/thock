@@ -67,6 +67,14 @@ enum SoundpackError: Error, CustomStringConvertible {
 enum SoundpackLoader {
     /// Peak level every pack is normalized to (-6 dBFS).
     static let targetPeak: Float = 0.5
+    /// Longest audio file a pack may reference (frames): ~10 min at 48 kHz.
+    static let maxFileFrames: Int64 = 30_000_000
+
+    /// A pack may only reference files inside its own folder.
+    static func isSafeRelativePath(_ relative: String) -> Bool {
+        !relative.isEmpty && !relative.hasPrefix("/") && !relative.hasPrefix("~")
+            && !relative.split(separator: "/").contains("..")
+    }
 
     private enum Define {
         case slice(startMs: Double, durMs: Double)
@@ -145,6 +153,9 @@ enum SoundpackLoader {
         // Whole-file decode cache for single packs and multi files.
         var decoded: [String: AVAudioPCMBuffer] = [:]
         func decodeCached(_ relative: String) throws -> AVAudioPCMBuffer {
+            guard isSafeRelativePath(relative) else {
+                throw SoundpackError.audio("refusing path outside the pack: \(relative)")
+            }
             if let b = decoded[relative] { return b }
             let b = try decodeWithFallback(directory.appendingPathComponent(relative), format: format)
             decoded[relative] = b
@@ -239,7 +250,8 @@ enum SoundpackLoader {
 
     private static func parseDefine(_ value: Any) -> Define {
         if let arr = value as? [Any], arr.count >= 2,
-           let start = (arr[0] as? NSNumber)?.doubleValue, let dur = (arr[1] as? NSNumber)?.doubleValue {
+           let start = (arr[0] as? NSNumber)?.doubleValue, let dur = (arr[1] as? NSNumber)?.doubleValue,
+           start.isFinite, dur.isFinite, start >= 0, dur > 0, start < 1e9, dur < 1e9 {
             return .slice(startMs: start, durMs: dur)
         }
         if let s = value as? String, !s.isEmpty {
@@ -255,7 +267,7 @@ enum SoundpackLoader {
         }
         let inner = pattern[pattern.index(after: open)..<close]
         let parts = inner.split(separator: "-")
-        guard parts.count == 2, let lo = Int(parts[0]), let hi = Int(parts[1]), lo <= hi else {
+        guard parts.count == 2, let lo = Int(parts[0]), let hi = Int(parts[1]), lo <= hi, hi - lo < 16 else {
             return [pattern]
         }
         let prefix = pattern[..<open]
@@ -270,9 +282,10 @@ enum SoundpackLoader {
         } catch {
             throw SoundpackError.audio("cannot open \(url.lastPathComponent): \(error.localizedDescription)")
         }
-        guard file.length > 0, let raw = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
-                                                          frameCapacity: AVAudioFrameCount(file.length)) else {
-            throw SoundpackError.audio("empty or unreadable \(url.lastPathComponent)")
+        guard file.length > 0, file.length <= maxFileFrames,
+              let raw = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                         frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw SoundpackError.audio("empty, unreadable or too long: \(url.lastPathComponent)")
         }
         do {
             try file.read(into: raw)

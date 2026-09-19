@@ -35,6 +35,7 @@ project). The first launch therefore needs one extra step on macOS 15+:
    Monitoring › thock). macOS may offer to quit and reopen thock — accept.
 
 That's it — from then on it just runs. The permission survives updates.
+On macOS 13 and 14 step 2–3 is simpler: right-click thock › **Open** › Open.
 
 ### Alternatives
 

@@ -317,6 +317,21 @@ Fremd-Requests; Security-Header gesetzt; kein Klarname im HTML.
   0,0005 g Rauschen. Feintuning über Beta-Feedback.
 - Kein Impressum, Pseudonym „Obsidi", siehe oben.
 
+## Härtung + Robustheit (2026-09-19, 0.6.2)
+- Packs: fünf `.ogg` → `.flac` (16-bit, gleiche Größe), weil Vorbis-Support
+  in AVAudioFile auf macOS 13/14 nicht gesichert ist; FLAC geht seit 10.13.
+- Loader gegen feindliche Packs: Pfade außerhalb des Pack-Ordners abgelehnt,
+  nur endliche/positive Slice-Werte, max. 30 M Frames pro Datei,
+  `{a-b}`-Muster ≤ 16, volle Sample-Tabelle (512) → Fallback statt Absturz.
+  Getestet mit drei Angriffs-Configs (Traversal, inf, 700 Slices).
+- Update-Link nur, wenn `https://github.com/…`.
+- `InstallCheck`: läuft die App vom DMG (read-only unter /Volumes), Angebot
+  „Move to Applications" → Kopie + Relaunch.
+- Website: CSP `default-src 'self'; script-src 'none'`, X-Frame-Options,
+  HSTS, Permissions-Policy; Inline-Styles entfernt.
+- Release 0.6.1 gelöscht (ogg-Packs), ersetzt durch 0.6.2.
+- Shipped Binary geprüft: keine lokalen Pfade, kein Name (`strings`).
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.

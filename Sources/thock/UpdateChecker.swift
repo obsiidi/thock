@@ -30,6 +30,11 @@ final class UpdateChecker {
                 completion(nil)
                 return
             }
+            // Only ever hand the user a GitHub HTTPS link, whatever the API said.
+            guard page.scheme == "https", page.host == "github.com" else {
+                completion(nil)
+                return
+            }
             let latest = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
             completion(isNewer(latest, than: currentVersion) ? Update(version: latest, url: page) : nil)
         }.resume()

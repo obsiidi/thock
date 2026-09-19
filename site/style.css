@@ -59,6 +59,8 @@ details p { margin: 10px 0 6px; }
 .popover .plus { border: 1px solid var(--border); border-radius: 6px; padding: 2px 8px; }
 .popover .slider { flex: 1; height: 4px; background: var(--border); border-radius: 2px; position: relative; }
 .popover .slider i { display: block; height: 100%; background: var(--accent); border-radius: 2px; position: relative; }
+.popover .slider i.w62 { width: 62%; }
+.popover .slider i.w50 { width: 50%; }
 .popover .slider i::after { content: ""; position: absolute; right: -8px; top: -7px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
 .popover .pct { width: 44px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .popover .switch { margin-left: auto; width: 34px; height: 20px; border-radius: 10px; background: var(--border); position: relative; }
