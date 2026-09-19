@@ -304,15 +304,26 @@ TCC-Identität: Eingabeüberwachung einmal neu erteilen; Einstellungen unter
 der alten Domain verfallen). Kein Impressum (Entscheidung des Entwicklers,
 Rechtslage bekannt). Release 0.6.0 gelöscht, ersetzt durch **0.6.1**.
 
-## Offene Punkte — nur der Entwickler kann das
-1. **Motion-Selftest** bewusst tippen (10× leicht, 10× fest) — der erste Lauf
-   hat normales Tippen erwischt (ungültig). Befund: normales Tippen
-   0,005–0,011 g, Rauschen 0,0005 g.
-2. **Vercel-Projekt** anlegen: Repo importieren, Root `site/`, Preset Other.
-3. **Impressum** in `site/imprint.html` ausfüllen (Adresse, E-Mail).
-4. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
+## Website live (2026-09-19)
+https://thock-ecru.vercel.app — Vercel-Projekt vom Entwickler angelegt;
+`vercel.json` (Repo-Root) setzt `outputDirectory: site` und `cleanUrls`.
+Geprüft: `/`, `/privacy`, CSS, Icon 200; `/imprint` 404 (gewollt); keine
+Fremd-Requests; Security-Header gesetzt; kein Klarname im HTML.
+
+## Entwickler-Entscheidungen
+- **Kein Motion-Selftest** — der Entwickler will ihn nicht ausführen.
+  Anschlagstärke bleibt mit den Standardwerten aktiv (Rauschboden ×2, laufendes
+  Maximum, Slider); einzige Datenbasis: normales Tippen 0,005–0,011 g bei
+  0,0005 g Rauschen. Feintuning über Beta-Feedback.
+- Kein Impressum, Pseudonym „Obsidi", siehe oben.
+
+## Offene Punkte
+1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.
-5. Optional: Developer ID (99 $/Jahr) — Schalter in `Tools/bundle.sh`.
+2. Optional: Developer ID (99 $/Jahr) — Schalter in `Tools/bundle.sh`.
+3. Beta starten: `docs/beta/` — Download-Link
+   https://github.com/obsiidi/thock/releases/latest, Website
+   https://thock-ecru.vercel.app.
 
 ## Nächster Schritt
 Beta starten (docs/beta/README.md), Feedback in Issues sammeln.
