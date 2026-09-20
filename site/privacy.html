@@ -8,30 +8,48 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
+<header class="top">
+  <a href="/" class="mark" aria-label="thock"><canvas class="mark-sm" data-dots data-mode="mark" data-step="2.5"></canvas></a>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/obsiidi/thock">GitHub</a>
+  <a class="btn sm" href="https://github.com/obsiidi/thock/releases/latest">Download</a>
+</header>
+
 <main>
-  <section>
-    <p><a href="/">← thock</a></p>
-    <h1>Privacy notice</h1>
+  <article class="article">
+    <a class="back" href="/">← thock</a>
+    <span class="eyebrow">Privacy notice</span>
+    <h1 class="title">Nothing you type leaves your Mac.</h1>
 
     <h2>The app</h2>
-    <p>thock runs entirely on your Mac. It does not collect, store or transmit personal data.</p>
+    <p class="body">thock runs entirely on your Mac. It does not collect, store or transmit personal data.</p>
     <ul>
-      <li><strong>Keyboard input.</strong> thock uses the macOS Input Monitoring permission to be notified of key presses. Each press is turned into a sound and then discarded. No keystrokes, text, window titles or clipboard contents are recorded. The optional diagnostics mode of the command-line tool (<code>--diag</code>) prints key names to your own terminal only when you run it yourself.</li>
-      <li><strong>Motion sensor.</strong> On supported MacBooks thock reads the built-in accelerometer to estimate how hard a key was hit. The readings are used immediately and not stored.</li>
-      <li><strong>Network.</strong> The only network request thock makes is an optional check for new versions: once per launch it asks <code>api.github.com</code> for the latest release of the thock repository. GitHub receives your IP address as with any web request; see <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. No other data is sent.</li>
-      <li><strong>Settings.</strong> Your preferences (chosen pack, volume, switches) are stored locally in <code>~/Library/Preferences/com.obsidi.thock.plist</code>. Imported packs are stored in <code>~/Library/Application Support/thock/packs</code>.</li>
-      <li><strong>No account, no analytics, no telemetry, no crash reporting.</strong></li>
+      <li><span class="hl">Keyboard input.</span> thock uses the macOS Input Monitoring permission to be notified of key presses. Each press is turned into a sound and then discarded. No keystrokes, text, window titles or clipboard contents are recorded. The optional diagnostics mode of the command-line tool (<code>--diag</code>) prints key names to your own terminal only when you run it yourself.</li>
+      <li><span class="hl">Motion sensor.</span> On supported MacBooks thock reads the built-in accelerometer to estimate how hard a key was hit. The readings are used immediately and not stored.</li>
+      <li><span class="hl">Network.</span> The only network request thock makes is an optional check for new versions: once per launch it asks <code>api.github.com</code> for the latest release of the thock repository. GitHub receives your IP address as with any web request; see <a class="u" href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. No other data is sent.</li>
+      <li><span class="hl">Settings.</span> Your preferences (chosen pack, volume, switches) are stored locally in <code>~/Library/Preferences/com.obsidi.thock.plist</code>. Imported packs are stored in <code>~/Library/Application Support/thock/packs</code>.</li>
+      <li><span class="hl">No account, no analytics, no telemetry, no crash reporting.</span></li>
     </ul>
 
     <h2>This website</h2>
-    <p>This site is static and sets no cookies and loads no third-party scripts, fonts or trackers. It is hosted by Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA. When you open the site, Vercel's servers process the technical data of your request (IP address, time, requested page, browser identification) to deliver the page and keep the service secure; see <a href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>. Downloads are served by GitHub.</p>
+    <p class="body">This site is static: no cookies, no third-party scripts, fonts or trackers — the typefaces are served from this site. The key-force demo runs in your browser and sends nothing. The site is hosted by Vercel Inc., 440 N Barranca Ave #4133, Covina, CA 91723, USA. When you open it, Vercel's servers process the technical data of your request (IP address, time, requested page, browser identification) to deliver the page and keep the service secure; see <a class="u" href="https://vercel.com/legal/privacy-policy">Vercel's privacy policy</a>. Downloads are served by GitHub.</p>
 
     <h2>Contact</h2>
-    <p>Questions about privacy: <a href="https://github.com/obsiidi/thock/issues">open an issue on GitHub</a>.</p>
-  </section>
+    <p class="body">Questions about privacy: <a class="u" href="https://github.com/obsiidi/thock/issues">open an issue on GitHub</a>.</p>
+  </article>
 </main>
+
 <footer>
-  <p>MIT © 2026 Obsidi · <a href="/privacy">Privacy</a> · <a href="https://github.com/obsiidi/thock">GitHub</a></p>
+  <div class="foot">
+    <canvas class="mark-foot" data-dots data-mode="mark" data-step="2.5" aria-hidden="true"></canvas>
+    <span class="spacer"></span>
+    <span>MIT © 2026 Obsidi</span>
+    <a href="/privacy">Privacy</a>
+    <a href="https://github.com/obsiidi/thock">GitHub</a>
+  </div>
 </footer>
+
+<script src="site.js"></script>
 </body>
 </html>

@@ -9,87 +9,168 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="hero">
-  <img class="icon" src="icon.png" width="112" height="112" alt="">
-  <h1>thock</h1>
-  <p class="tagline">Mechanical keyboard sounds for your Mac — that follow how hard you type.</p>
-  <p class="cta">
-    <a class="button" href="https://github.com/obsiidi/thock/releases/latest">Download for macOS</a>
-    <a class="secondary" href="https://github.com/obsiidi/thock">Source on GitHub</a>
-  </p>
-  <p class="meta">Free · open source (MIT) · no account · macOS 13+ · Apple Silicon &amp; Intel</p>
+
+<header class="top">
+  <a href="#top" class="mark" aria-label="thock"><canvas class="mark-sm" data-dots data-mode="mark" data-step="2.5"></canvas></a>
+  <nav>
+    <a href="#force">Key force</a>
+    <a href="#packs">Packs</a>
+    <a href="#app">The app</a>
+    <a href="#install">Install</a>
+  </nav>
+  <span class="spacer"></span>
+  <a class="gh" href="https://github.com/obsiidi/thock">GitHub</a>
+  <a class="btn sm" href="https://github.com/obsiidi/thock/releases/latest">Download</a>
 </header>
 
-<main>
-  <section class="features">
-    <div>
-      <h2>Key force</h2>
-      <p>MacBooks with a motion sensor feel each keystroke through the chassis. thock reads it ~800 times a second and plays firm hits louder and brighter, light taps softer and duller. Adjustable from soft to hard.</p>
+<main id="top">
+
+  <section class="hero">
+    <h1 class="sr-only">thock — mechanical keyboard sounds with key force, for Mac</h1>
+    <div class="hero-mark"><canvas class="mark-hero" data-dots data-mode="mark" data-step="6" aria-hidden="true"></canvas></div>
+    <p class="tagline">Mechanical keyboard sounds for your Mac — that follow how hard you type.</p>
+    <div class="cta">
+      <a class="btn" href="https://github.com/obsiidi/thock/releases/latest">Download for macOS</a>
+      <a class="btn-ghost" href="https://github.com/obsiidi/thock">Source on GitHub</a>
     </div>
-    <div>
-      <h2>Real recordings</h2>
-      <p>Seven packs included — Cherry MX Blue, Brown, Red and Black, Topre, Holy Pandas, NK Cream. Drop any <a href="https://mechvibes.com">Mechvibes</a> pack onto the window to add more.</p>
+    <p class="meta">Free · open source (MIT) · no account · macOS 13+ · Apple Silicon &amp; Intel</p>
+  </section>
+
+  <section id="force" class="sec split">
+    <div class="stack">
+      <span class="eyebrow">01 — Key force</span>
+      <h2 class="title">It hears how hard you hit.</h2>
+      <p class="lead">MacBooks with a motion sensor feel each keystroke through the chassis. thock reads it ~800 times a second and plays firm hits louder and brighter, light taps softer and duller.</p>
+      <p class="sub">Adjustable from soft to hard — or off, if you want every key the same.</p>
     </div>
-    <div>
-      <h2>Out of the way</h2>
-      <p>Lives in the menu bar: one click for sound, volume, on/off. About 5 ms from keystroke to sound, under 1 % CPU, and nothing you type ever leaves your Mac.</p>
+    <div class="demo">
+      <div class="demo-head">
+        <span>Live demo</span>
+        <span class="rule"></span>
+        <button class="demo-toggle" id="soundToggle" type="button" aria-pressed="false">sound off</button>
+      </div>
+      <canvas class="force" data-dots data-mode="force" data-step="7" aria-hidden="true"></canvas>
+      <div class="demo-range">
+        <span>soft</span>
+        <input type="range" id="forceRange" min="0" max="100" value="62" aria-label="Demo sensitivity">
+        <span>hard</span>
+      </div>
+      <p class="demo-note">Type anywhere on this page — each key lights a column, taller and brighter the harder the modelled hit. Turn sound on for a synthesised preview of the real thing.</p>
     </div>
   </section>
 
-  <section class="popover-demo" aria-label="What the menu bar popover looks like">
-    <div class="popover">
-      <div class="row head"><span>⌨︎ thock</span><span class="dot"></span><span class="switch on"></span></div>
-      <div class="row"><span>Sound</span><span class="select">Topre Purple Hybrid – PBT ▾</span><span class="plus">+</span></div>
-      <div class="row"><span>🔊</span><span class="slider"><i class="w62"></i></span><span class="pct">62 %</span></div>
-      <div class="row"><span>Key force</span><span class="switch on"></span></div>
-      <div class="row small"><span>soft</span><span class="slider"><i class="w50"></i></span><span>hard</span></div>
-      <div class="row"><span>Key-release sounds</span><span class="switch"></span></div>
-      <div class="row"><span>Launch at login</span><span class="switch on"></span></div>
-      <div class="row status">Active — Topre Purple Hybrid – PBT keycaps</div>
-      <div class="row foot"><span>v0.6.0 · Setup · Packs folder · Feedback</span><span class="quit">Quit</span></div>
+  <section id="packs" class="sec stack">
+    <div class="stack tight mw-620">
+      <span class="eyebrow">02 — Packs</span>
+      <h2 class="title">Seven real recordings.</h2>
+      <p class="lead">Sampled from the switches themselves, not synthesised. Drop any <a class="u" href="https://mechvibes.com">Mechvibes</a> pack onto the window to add more.</p>
     </div>
-    <p class="caption">The whole app is this popover.</p>
+    <div class="packs">
+      <div class="pack"><div class="pack-name"><b>Cherry MX Blue</b><span>CLICKY</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="1" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Cherry MX Brown</b><span>TACTILE</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="2" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Cherry MX Red</b><span>LINEAR</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="3" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Cherry MX Black</b><span>LINEAR · HEAVY</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="4" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Topre</b><span>ELECTRO-CAP</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="5" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Holy Pandas</b><span>TACTILE</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="6" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>NK Cream</b><span>LINEAR</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="7" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack own"><b>+ your own</b><span>Drag a Mechvibes pack onto the window.</span></div>
+    </div>
   </section>
 
-  <section id="install">
-    <h2>Install</h2>
-    <p>thock is a free project and not notarized by Apple, so the first launch takes one extra step on macOS 15 and later. After that it just runs.</p>
-    <ol>
-      <li><a href="https://github.com/obsiidi/thock/releases/latest">Download</a> <code>thock-&lt;version&gt;.dmg</code>, open it and drag <strong>thock</strong> into <strong>Applications</strong>.</li>
-      <li>Open thock. macOS will say it "was not opened".</li>
-      <li>Go to <strong>System Settings › Privacy &amp; Security</strong>, scroll down, click <strong>Open Anyway</strong> next to thock and confirm with your password.</li>
-      <li>thock starts and shows a short setup window. Follow it to allow <strong>Input Monitoring</strong> — that is how it sees your key presses. If macOS offers to quit and reopen thock, accept.</li>
-    </ol>
-    <details>
-      <summary>Prefer the Terminal? Skip step 2–3.</summary>
-      <p>Remove the quarantine flag after copying the app:</p>
-      <pre><code>xattr -d com.apple.quarantine /Applications/thock.app</code></pre>
-      <p>Or, once the Homebrew tap is published:</p>
-      <pre><code>brew install --cask --no-quarantine obsiidi/thock/thock</code></pre>
-    </details>
+  <section id="app" class="sec split center">
+    <div class="stack">
+      <span class="eyebrow">03 — The app</span>
+      <h2 class="title">The whole app is this popover.</h2>
+      <p class="lead">Lives in the menu bar: one click for sound, volume, on/off. About 5 ms from keystroke to sound, under 1 % CPU, and nothing you type ever leaves your Mac.</p>
+      <div class="stats">
+        <div class="stat"><b>~5 ms</b><span>key → sound</span></div>
+        <div class="stat"><b>&lt; 1 %</b><span>CPU</span></div>
+        <div class="stat"><b>800 Hz</b><span>sensor read</span></div>
+      </div>
+    </div>
+    <div class="popover-wrap" aria-label="What the menu bar popover looks like">
+      <div class="popover">
+        <div class="pop-head"><span>⌨︎ thock</span><span class="spacer"></span><span class="dot"></span></div>
+        <div class="pop-body">
+          <div class="pop-field">
+            <span class="pop-label">Sound</span>
+            <div class="pop-select"><span class="ellipsis">Topre Purple Hybrid – PBT</span><span class="caret">▾</span></div>
+          </div>
+          <div class="pop-field meter">
+            <div class="meter-head"><span class="pop-label">Volume</span><span class="val">62 %</span></div>
+            <div class="dots"><i class="w62"></i></div>
+          </div>
+          <div class="pop-field meter">
+            <div class="meter-head"><span class="pop-label">Key force</span><span class="val">firm</span></div>
+            <div class="dots"><i class="w74"></i></div>
+          </div>
+          <div class="pop-toggles">
+            <div class="pop-row"><span>Key-release sounds</span><span class="sw"><i></i></span></div>
+            <div class="pop-row"><span>Launch at login</span><span class="sw off"><i></i></span></div>
+          </div>
+          <div class="pop-foot"><span class="dot s"></span><span class="ellipsis">Active — Topre Purple Hybrid</span><span class="ver">v0.6.2</span></div>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section id="requirements">
-    <h2>Requirements</h2>
-    <ul>
-      <li>macOS 13 Ventura or later, Apple Silicon or Intel.</li>
-      <li><strong>Key force</strong> needs the built-in motion sensor: MacBook Pro or Air with M1 Pro/Max or any M2 or later chip, typing on the built-in keyboard. On other Macs and external keyboards thock plays at a fixed loudness and tells you so.</li>
-    </ul>
+  <section id="install" class="sec stack">
+    <div class="stack tight mw-680">
+      <span class="eyebrow">04 — Install</span>
+      <h2 class="title">One extra step, once.</h2>
+      <p class="lead">thock is a free project and not notarized by Apple, so the first launch takes one extra step on macOS 15 and later. After that it just runs.</p>
+    </div>
+    <div class="split">
+      <ol class="steps">
+        <li><span class="n">01</span><span class="t"><a class="u" href="https://github.com/obsiidi/thock/releases/latest">Download</a> <span class="hl">thock-&lt;version&gt;.dmg</span>, open it and drag <span class="hl">thock</span> into <span class="hl">Applications</span>.</span></li>
+        <li><span class="n">02</span><span class="t">Open thock. macOS will say it “was not opened”.</span></li>
+        <li><span class="n">03</span><span class="t">Go to <span class="hl">System Settings › Privacy &amp; Security</span>, scroll down, click <span class="hl">Open Anyway</span> next to thock and confirm with your password.</span></li>
+        <li><span class="n">04</span><span class="t">thock starts and shows a short setup window. Follow it to allow <span class="hl">Input Monitoring</span> — that is how it sees your key presses. If macOS offers to quit and reopen thock, accept.</span></li>
+      </ol>
+      <div class="alt">
+        <span class="alt-title">Prefer the Terminal? Skip steps 2–3.</span>
+        <p>Remove the quarantine flag after copying the app:</p>
+        <pre>xattr -d com.apple.quarantine /Applications/thock.app</pre>
+        <p>Or, once the Homebrew tap is published:</p>
+        <pre>brew install --cask --no-quarantine obsiidi/thock/thock</pre>
+      </div>
+    </div>
   </section>
 
-  <section id="privacy">
-    <h2>Privacy</h2>
-    <p>thock asks for <strong>Input Monitoring</strong> because that is the only way to hear key presses. It turns each press into a sound and nothing else: no keystrokes are stored, logged or transmitted. The motion sensor is read for impact strength only. The app makes a single, optional network request — asking GitHub whether a newer release exists. There is no account, no analytics, no telemetry. <a href="/privacy">Full privacy notice</a>.</p>
+  <section class="sec split narrow">
+    <div class="stack tight">
+      <span class="eyebrow">05 — Requirements</span>
+      <p class="body">macOS 13 Ventura or later, Apple Silicon or Intel.</p>
+      <p class="body dim"><span class="hl">Key force</span> needs the built-in motion sensor: MacBook Pro or Air with M1 Pro/Max or any M2 or later chip, typing on the built-in keyboard. On other Macs and external keyboards thock plays at a fixed loudness and tells you so.</p>
+    </div>
+    <div class="stack tight">
+      <span class="eyebrow">06 — Privacy</span>
+      <p class="body">thock asks for <span class="hl">Input Monitoring</span> because that is the only way to hear key presses. It turns each press into a sound and nothing else: no keystrokes are stored, logged or transmitted.</p>
+      <p class="body dim">The motion sensor is read for impact strength only. The app makes a single, optional network request — asking GitHub whether a newer release exists. No account, no analytics, no telemetry. <a class="u" href="/privacy">Full privacy notice</a>.</p>
+    </div>
   </section>
 
-  <section id="feedback">
-    <h2>Feedback</h2>
-    <p>Something broken, a pack that doesn't load, a Mac that should have key force but doesn't? <a href="https://github.com/obsiidi/thock/issues">Open an issue</a>.</p>
+  <section class="sec finale">
+    <h2 class="title">Make your Mac sound like a keyboard worth typing on.</h2>
+    <div class="cta">
+      <a class="btn" href="https://github.com/obsiidi/thock/releases/latest">Download for macOS</a>
+      <a class="btn-ghost" href="https://github.com/obsiidi/thock/issues">Report an issue</a>
+    </div>
+    <p>Something broken, a pack that doesn’t load, a Mac that should have key force but doesn’t? Open an issue — it gets read.</p>
   </section>
+
 </main>
 
 <footer>
-  <p>MIT © 2026 Obsidi · <a href="/privacy">Privacy</a> · <a href="https://github.com/obsiidi/thock">GitHub</a></p>
+  <div class="foot">
+    <canvas class="mark-foot" data-dots data-mode="mark" data-step="2.5" aria-hidden="true"></canvas>
+    <span class="spacer"></span>
+    <span>MIT © 2026 Obsidi</span>
+    <a href="/privacy">Privacy</a>
+    <a href="https://github.com/obsiidi/thock">GitHub</a>
+  </div>
 </footer>
+
+<script src="site.js"></script>
 </body>
 </html>

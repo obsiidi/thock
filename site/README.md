@@ -1,6 +1,10 @@
 # thock website
 
-Static HTML/CSS, no build step, no third-party requests.
+Static HTML/CSS/JS, no build step, no third-party requests. Design made in
+Claude Design and ported to plain files: `index.html`, `style.css`, `site.js`
+(dot-matrix graphics + key-force demo), self-hosted fonts in `fonts/` (OFL).
+The CSP in `vercel.json` allows only same-origin styles, scripts and fonts —
+no inline `style=""` or `<script>` blocks.
 
 ## Deploy on Vercel (free Hobby plan — fine as long as nothing is sold)
 

@@ -332,6 +332,15 @@ Fremd-Requests; Security-Header gesetzt; kein Klarname im HTML.
 - Release 0.6.1 gelöscht (ogg-Packs), ersetzt durch 0.6.2.
 - Shipped Binary geprüft: keine lokalen Pfade, kein Name (`strings`).
 
+## Website-Redesign (2026-09-20)
+Entwurf des Entwicklers aus Claude Design (`.dc.html`) nach `site/` portiert:
+Inline-Styles → `style.css`, Komponentenlogik → `site.js` (Dot-Matrix-
+Wortmarke, Pack-Wellenformen, Key-Force-Demo mit Web-Audio-Klick), Google
+Fonts → selbst gehostet (`site/fonts/`, Archivo + JetBrains Mono, OFL), damit
+kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
+(Designentscheidung). `privacy.html` im selben Stil. Geprüft: Desktop, 375 px
+(Nav ausgeblendet), Fonts geladen, nur Same-Origin-Requests, Demo reagiert.
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.
