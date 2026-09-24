@@ -362,7 +362,7 @@ enum StatsFormat {
     }
 
     static func todayLine(_ s: StatsSummary) -> String {
-        var parts = ["Today \(number(s.today.keys)) keys"]
+        var parts = ["Today \(number(s.today.keys)) \(s.today.keys == 1 ? "key" : "keys")"]
         if s.today.peakWPM > 0 { parts.append("\(s.today.peakWPM) wpm peak") }
         if s.streak > 1 { parts.append("\(s.streak)-day streak") }
         return parts.joined(separator: " · ")

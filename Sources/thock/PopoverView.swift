@@ -8,7 +8,7 @@ struct PopoverView: View {
     @State private var dropTargeted = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 9) {
             HStack {
                 Image(systemName: "keyboard")
                 Text("thock").font(.headline)
@@ -47,17 +47,16 @@ struct PopoverView: View {
             }
 
             if state.sensorAvailable {
-                VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
                     Toggle("Key force", isOn: $state.velocityEnabled)
                         .toggleStyle(.switch)
+                        .fixedSize()
                         .help("Loudness and tone follow how hard you hit the key (motion sensor).")
-                    HStack {
-                        Text("soft").font(.caption2).foregroundColor(.secondary)
-                        Slider(value: $state.sensitivitySlider, in: 0...1)
-                            .disabled(!state.velocityEnabled)
-                        Text("hard").font(.caption2).foregroundColor(.secondary)
-                    }
-                    .help("Sensitivity: left needs firm hits for full volume, right makes light taps loud.")
+                    Text("soft").font(.caption2).foregroundColor(.secondary)
+                    Slider(value: $state.sensitivitySlider, in: 0...1)
+                        .disabled(!state.velocityEnabled)
+                        .help("Sensitivity: left needs firm hits for full volume, right makes light taps loud.")
+                    Text("hard").font(.caption2).foregroundColor(.secondary)
                 }
             }
 
@@ -71,8 +70,9 @@ struct PopoverView: View {
                 HStack {
                     Toggle("Trackpad clicks", isOn: $state.pointerSounds)
                         .toggleStyle(.switch)
+                        .fixedSize()
                         .help("Click sounds for the trackpad and any mouse.")
-                    Spacer()
+                    Spacer(minLength: 6)
                     Picker("", selection: $state.mouseSetID) {
                         ForEach(state.mouseSets, id: \.id) { m in
                             Text(m.name).tag(m.id)
@@ -80,7 +80,7 @@ struct PopoverView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.menu)
-                    .frame(width: 150)
+                    .frame(maxWidth: 140)
                     .disabled(!state.pointerSounds || state.mouseSets.isEmpty)
                 }
                 Toggle("Scroll ticks", isOn: $state.scrollTicks)
@@ -144,7 +144,8 @@ struct PopoverView: View {
                 Text("v\(state.version)").font(.caption).foregroundColor(.secondary)
                 Button("Setup") { showSetup() }.buttonStyle(.link).font(.caption)
                 Button("Stats") { showStats() }.buttonStyle(.link).font(.caption)
-                Button("Packs folder") { state.revealPacksFolder() }.buttonStyle(.link).font(.caption)
+                Button("Packs") { state.revealPacksFolder() }.buttonStyle(.link).font(.caption)
+                    .help("Open the folder with your imported sound packs")
                 Button("Feedback") { state.openFeedback() }.buttonStyle(.link).font(.caption)
                 Spacer()
                 Button("Quit") {
@@ -153,6 +154,7 @@ struct PopoverView: View {
                 .keyboardShortcut("q")
             }
         }
+        .controlSize(.small)
         .padding(14)
         .frame(width: 320)
         .onAppear { state.refreshTodayLine() }

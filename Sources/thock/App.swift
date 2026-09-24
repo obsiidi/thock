@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.behavior = .transient
         popover.animates = false
-        popover.contentViewController = NSHostingController(rootView: PopoverView(state: state, showSetup: { [weak self] in
+        let host = NSHostingController(rootView: PopoverView(state: state, showSetup: { [weak self] in
             self?.popover.performClose(nil)
             self?.showOnboarding()
         }, showStats: { [weak self] in
@@ -50,6 +50,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.popover.performClose(nil)
             self.statsWindow.show(state: self.state)
         }))
+        // Let the popover follow the SwiftUI content height; without this a
+        // taller view is clipped at the top.
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
 
         for sig in [SIGTERM, SIGINT] {
             signal(sig, SIG_IGN)
@@ -83,6 +87,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(nil)
         } else {
             NSApp.activate(ignoringOtherApps: true)
+            if let view = popover.contentViewController?.view {
+                view.layoutSubtreeIfNeeded()
+                popover.contentSize = view.fittingSize
+            }
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
