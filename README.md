@@ -14,6 +14,11 @@ for light ones.
 - Seven recorded packs included (Cherry MX Blue/Brown/Red/Black, Topre,
   Holy Pandas, NK Cream). Import any [Mechvibes](https://mechvibes.com)
   pack with drag & drop.
+- Trackpad and mouse clicks get recorded mouse sounds (Magic Mouse, MX
+  Master 3S, Lift, M553) — firm Force Touch clicks sound louder. Optional
+  scroll ticks.
+- Local typing stats: keystrokes, peak speed, streaks, a key heatmap and
+  your hardest-hit key, shareable as an image. Counts only, never text.
 - ~5 ms from keystroke to sound. Own render path, no per-key allocation.
 - Free, open source (MIT), no account, no telemetry. The only network
   request is an optional check for new releases on GitHub.
@@ -64,7 +69,10 @@ brew install --cask --no-quarantine obsiidi/thock/thock
 
 thock needs **Input Monitoring** to see key presses — the same permission
 any keyboard-sound app needs. It turns each press into a sound and nothing
-else: no keystrokes are stored, logged, or sent anywhere. The motion sensor
+else: no text, characters or key order is stored, logged, or sent
+anywhere. Typing stats keep only per-day counts in
+`~/Library/Application Support/thock/stats.json` (off switch and reset in
+the Stats window). The motion sensor
 is read for impact strength only. Verify it in the source: all key handling
 lives in `Sources/thock/KeyTap.swift` and `Pipeline.swift`.
 
@@ -96,6 +104,8 @@ thock --diag              log one line per key (name, sample, force, latency)
 thock --selftest          synthetic keystrokes, latency and render proof
 thock --selftest --burst 20
 thock --diag-motion       motion sensor vs. key events (no key codes logged)
+thock --selftest-pointer  synthetic clicks/scrolls -> mouse sounds
+thock --stats             local typing stats summary
 thock --motion-selftest   10 light + 10 hard hits, checks they separate
 thock --list-packs        packs and how many keys each one maps
 thock --map --pack NAME   key → scancode → sample table

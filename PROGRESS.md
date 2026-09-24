@@ -395,6 +395,20 @@ kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
   Release, 19 Ticks (14 Trackpad + 5 Rad), fest vs. leicht +4,8 dB, PASS.
   `--diag --all` zeigt `pd/pu/sc`-Zeilen.
 
+## Phase 9 — Release 0.7.0 ✅ (2026-09-24)
+- Version 0.7.0 (Build 9), DMG universal, signiert, Cask-Prüfsumme.
+- Website: neue Abschnitte „04 — Trackpad" (vier Maus-Kacheln) und
+  „05 — Stats" (Beispiel-Karte `site/stats-card.png`, aus Testdaten
+  gerendert), Nav-Link „Stats", Popover-Mock mit „Trackpad clicks",
+  Privacy-Seite um Tipp-Statistik und Trackpad ergänzt; Wortlaut „no
+  keystrokes are stored" → „never text or key order" (Zähler existieren
+  jetzt). Geprüft: Desktop + 375 px, nur Same-Origin-Requests.
+- README: Features und Privacy aktualisiert.
+- Offen: Pointer-Probe lief 10 min ohne echte Klicks (Entwickler abwesend).
+  Druckwerte echter Force-Touch-Klicks noch unbestätigt — `thock --diag
+  --all` zeigt sie (`pd … pressure=`). Mapping −6…0 dB funktioniert auch,
+  wenn der Trackpad immer 1 meldet (dann einfach volle Lautstärke).
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.

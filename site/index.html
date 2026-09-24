@@ -16,6 +16,7 @@
     <a href="#force">Key force</a>
     <a href="#packs">Packs</a>
     <a href="#app">The app</a>
+    <a href="#stats">Stats</a>
     <a href="#install">Install</a>
   </nav>
   <span class="spacer"></span>
@@ -106,17 +107,46 @@
           </div>
           <div class="pop-toggles">
             <div class="pop-row"><span>Key-release sounds</span><span class="sw"><i></i></span></div>
+            <div class="pop-row"><span>Trackpad clicks</span><span class="sw"><i></i></span></div>
             <div class="pop-row"><span>Launch at login</span><span class="sw off"><i></i></span></div>
           </div>
-          <div class="pop-foot"><span class="dot s"></span><span class="ellipsis">Active — Topre Purple Hybrid</span><span class="ver">v0.6.2</span></div>
+          <div class="pop-foot"><span class="dot s"></span><span class="ellipsis">Active — Topre Purple Hybrid</span><span class="ver">v0.7.0</span></div>
         </div>
       </div>
     </div>
   </section>
 
+  <section id="trackpad" class="sec split center">
+    <div class="stack">
+      <span class="eyebrow">04 — Trackpad</span>
+      <h2 class="title">Clicks sound like a mouse again.</h2>
+      <p class="lead">Trackpad clicks and taps get the sound of a real mouse — five recordings, from Magic Mouse to MX Master. Force Touch trackpads report how hard you pressed, so a firm click is louder than a light one.</p>
+      <p class="sub">Optional scroll ticks every few lines, like a wheel with detents. Tip: turn on Silent clicking in Trackpad settings and you mostly hear thock.</p>
+    </div>
+    <div class="packs mice">
+      <div class="pack"><div class="pack-name"><b>MX Master 3S</b><span>LOGITECH</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="11" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Magic Mouse</b><span>APPLE</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="12" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>Lift</b><span>LOGITECH</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="13" data-step="5" aria-hidden="true"></canvas></div>
+      <div class="pack"><div class="pack-name"><b>M553</b><span>LOGITECH</span></div><canvas class="bars" data-dots data-mode="bars" data-seed="14" data-step="5" aria-hidden="true"></canvas></div>
+    </div>
+  </section>
+
+  <section id="stats" class="sec stack">
+    <div class="stack tight mw-680">
+      <span class="eyebrow">05 — Stats</span>
+      <h2 class="title">Your typing, counted on your Mac.</h2>
+      <p class="lead">Keystrokes per day, peak speed, typing time, streaks, a heatmap of the keys you hit most — and, with key force, which key you hit hardest. Share your week as an image.</p>
+      <p class="sub">Counts only, never what you type. Stored on your Mac, never uploaded. Switch it off or reset it any time.</p>
+    </div>
+    <figure class="card-fig">
+      <img src="stats-card.png" width="1200" height="630" alt="Example share card: 36,283 keystrokes, 80 wpm peak, 17 h 13 min typing, 9-day streak, and a keyboard heatmap.">
+      <figcaption>Example share card.</figcaption>
+    </figure>
+  </section>
+
   <section id="install" class="sec stack">
     <div class="stack tight mw-680">
-      <span class="eyebrow">04 — Install</span>
+      <span class="eyebrow">06 — Install</span>
       <h2 class="title">One extra step, once.</h2>
       <p class="lead">thock is a free project and not notarized by Apple, so the first launch takes one extra step on macOS 15 and later. After that it just runs.</p>
     </div>
@@ -139,13 +169,13 @@
 
   <section class="sec split narrow">
     <div class="stack tight">
-      <span class="eyebrow">05 — Requirements</span>
+      <span class="eyebrow">07 — Requirements</span>
       <p class="body">macOS 13 Ventura or later, Apple Silicon or Intel.</p>
       <p class="body dim"><span class="hl">Key force</span> needs the built-in motion sensor: MacBook Pro or Air with M1 Pro/Max or any M2 or later chip, typing on the built-in keyboard. On other Macs and external keyboards thock plays at a fixed loudness and tells you so.</p>
     </div>
     <div class="stack tight">
-      <span class="eyebrow">06 — Privacy</span>
-      <p class="body">thock asks for <span class="hl">Input Monitoring</span> because that is the only way to hear key presses. It turns each press into a sound and nothing else: no keystrokes are stored, logged or transmitted.</p>
+      <span class="eyebrow">08 — Privacy</span>
+      <p class="body">thock asks for <span class="hl">Input Monitoring</span> because that is the only way to hear key presses. It turns each press into a sound and, for your stats, a count — never text, never the order of keys, nothing transmitted.</p>
       <p class="body dim">The motion sensor is read for impact strength only. The app makes a single, optional network request — asking GitHub whether a newer release exists. No account, no analytics, no telemetry. <a class="u" href="/privacy">Full privacy notice</a>.</p>
     </div>
   </section>

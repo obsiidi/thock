@@ -6,8 +6,8 @@
 #        brew install --cask --no-quarantine obsiidi/thock/thock
 #      --no-quarantine skips Gatekeeper for the unnotarized app.
 cask "thock" do
-  version "0.6.2"
-  sha256 "190f75c7cbaf91b9f93a0f1bcef00b23cb0157010a06c2abe0618e95615b3d69"
+  version "0.7.0"
+  sha256 "a53d5afec2665f3b78998de0191b3959f8120875f8e5a7e700cc29374732b054"
 
   url "https://github.com/obsiidi/thock/releases/download/v#{version}/thock-#{version}.dmg"
   name "thock"
