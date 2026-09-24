@@ -67,6 +67,35 @@ struct PopoverView: View {
                 .help(state.packHasKeyUp ? "This pack has its own sounds for releasing a key."
                                          : "This pack has no key-release sounds.")
 
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Toggle("Trackpad clicks", isOn: $state.pointerSounds)
+                        .toggleStyle(.switch)
+                        .help("Click sounds for the trackpad and any mouse.")
+                    Spacer()
+                    Picker("", selection: $state.mouseSetID) {
+                        ForEach(state.mouseSets, id: \.id) { m in
+                            Text(m.name).tag(m.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
+                    .disabled(!state.pointerSounds || state.mouseSets.isEmpty)
+                }
+                Toggle("Scroll ticks", isOn: $state.scrollTicks)
+                    .toggleStyle(.switch)
+                    .help("A soft tick every few lines while you scroll.")
+                if state.pointerSounds {
+                    Button("Tip: turn on Silent clicking in Trackpad settings") {
+                        state.openTrackpadSettings()
+                    }
+                    .buttonStyle(.link)
+                    .font(.caption2)
+                    .help("Your MacBook's trackpad makes its own click sound. With Silent clicking on, you mostly hear thock.")
+                }
+            }
+
             Toggle("Launch at login", isOn: $state.launchAtLogin)
                 .toggleStyle(.switch)
 

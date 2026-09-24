@@ -19,6 +19,29 @@ enum Resources {
         return base.appendingPathComponent("thock/packs", isDirectory: true)
     }
 
+    static var mouseRoot: URL {
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("mouse-packs"),
+           FileManager.default.fileExists(atPath: bundled.path) {
+            return bundled
+        }
+        return URL(fileURLWithPath: "mouse-packs")
+    }
+
+    struct MouseEntry: Hashable {
+        let directory: URL
+        let name: String
+        var id: String { directory.lastPathComponent }
+    }
+
+    static func mouseEntries() -> [MouseEntry] {
+        let fm = FileManager.default
+        guard let dirs = try? fm.contentsOfDirectory(at: mouseRoot, includingPropertiesForKeys: nil) else { return [] }
+        return dirs
+            .filter { fm.fileExists(atPath: $0.appendingPathComponent("down.wav").path) }
+            .map { MouseEntry(directory: $0, name: MouseSet.displayName($0)) }
+            .sorted { $0.name < $1.name }
+    }
+
     static var clickURL: URL {
         if let bundled = Bundle.main.resourceURL?.appendingPathComponent("Samples/click.wav"),
            FileManager.default.fileExists(atPath: bundled.path) {

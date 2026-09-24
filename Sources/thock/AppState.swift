@@ -15,6 +15,9 @@ final class AppState: ObservableObject {
         static let sensitivity = "sensitivity"
         static let onboarded = "onboarded"
         static let keepStats = "keepStats"
+        static let pointerSounds = "pointerSounds"
+        static let scrollTicks = "scrollTicks"
+        static let mouseSet = "mouseSet"
     }
 
     @Published var packs: [Resources.PackEntry] = []
@@ -81,6 +84,28 @@ final class AppState: ObservableObject {
         }
     }
     @Published var todayLine = ""
+
+    /// Trackpad / mouse click sounds and scroll ticks.
+    @Published var pointerSounds: Bool {
+        didSet {
+            defaults.set(pointerSounds, forKey: Keys.pointerSounds)
+            queue.async { [weak self] in self?.pipeline?.pointerSounds = self?.pointerSounds ?? true }
+        }
+    }
+    @Published var scrollTicks: Bool {
+        didSet {
+            defaults.set(scrollTicks, forKey: Keys.scrollTicks)
+            queue.async { [weak self] in self?.pipeline?.scrollTicks = self?.scrollTicks ?? false }
+        }
+    }
+    @Published var mouseSets: [Resources.MouseEntry] = []
+    @Published var mouseSetID: String {
+        didSet {
+            guard mouseSetID != oldValue else { return }
+            defaults.set(mouseSetID, forKey: Keys.mouseSet)
+            if permissionGranted { run() }
+        }
+    }
     private var statsTimer: Timer?
 
     let verbose: Bool
@@ -107,6 +132,9 @@ final class AppState: ObservableObject {
         velocityEnabled = defaults.object(forKey: Keys.velocity) as? Bool ?? true
         sensitivitySlider = defaults.object(forKey: Keys.sensitivity) as? Double ?? 0.5
         keepStats = defaults.object(forKey: Keys.keepStats) as? Bool ?? true
+        pointerSounds = defaults.object(forKey: Keys.pointerSounds) as? Bool ?? true
+        scrollTicks = defaults.object(forKey: Keys.scrollTicks) as? Bool ?? false
+        mouseSetID = defaults.string(forKey: Keys.mouseSet) ?? "mx-master-3s"
         typing.enabled = keepStats
         typing.startAutosave()
     }
@@ -119,6 +147,7 @@ final class AppState: ObservableObject {
     // MARK: lifecycle
 
     func start() {
+        mouseSets = Resources.mouseEntries()
         reloadPacks()
         if !packs.contains(where: { $0.id == selectedPack }), let first = packs.first {
             selectedPack = first.id      // triggers switchPack; engine not running yet -> just loads
@@ -255,6 +284,12 @@ final class AppState: ObservableObject {
         }
     }
 
+    func openTrackpadSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Trackpad-Settings.extension") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     func openInputMonitoringSettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(url)
@@ -266,6 +301,7 @@ final class AppState: ObservableObject {
     private func run() {
         let packID = selectedPack
         let packs = self.packs
+        let mouseDir = (mouseSets.first { $0.id == mouseSetID } ?? mouseSets.first)?.directory
         queue.async { [self] in
             teardown()
             let selection: PackSelection
@@ -274,7 +310,7 @@ final class AppState: ObservableObject {
             } else {
                 selection = .builtIn(clickPath: Resources.clickURL.path)
             }
-            guard let audio = makeAudio(selection, bufferFrames: bufferFrames), let pack = audio.pack else {
+            guard let audio = makeAudio(selection, bufferFrames: bufferFrames, mouse: mouseDir), let pack = audio.pack else {
                 publish(status: "Audio could not start (\(selection.label)).", running: false)
                 return
             }
@@ -294,6 +330,8 @@ final class AppState: ObservableObject {
             }
             let pipeline = Pipeline(audio: audio, pack: pack, motion: motion)
             pipeline.keyUpSounds = keyUpSounds
+            pipeline.pointerSounds = pointerSounds
+            pipeline.scrollTicks = scrollTicks
             pipeline.muted = !enabled
             pipeline.velocity.enabled = velocityEnabled
             pipeline.velocity.sensitivity = Float(0.3 * pow(10, sensitivitySlider))
@@ -322,6 +360,7 @@ final class AppState: ObservableObject {
             let info = describe(pack)
             stderrLine("thock: running. \(describe(audio.deviceInfo())) voices=\(VoiceMixer.voiceCount)")
             stderrLine("thock: \(info)")
+            stderrLine("thock: mouse sounds: \(audio.mouse?.name ?? "none") clicks=\(pointerSounds) scroll=\(scrollTicks)")
             let hasKeyUp = pack.hasKeyUp
             stderrLine("thock: velocity " + (motion != nil ? "on (accelerometer)" : "off (no sensor)"))
             publish(status: "Active — \(pack.name)", running: true, packInfo: info)

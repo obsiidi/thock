@@ -369,6 +369,32 @@ kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
 - Geprüft: Karte gerendert und angesehen, Fenster per Accessibility
   ausgelesen (Werte, Heatmap-Labels, Rekorde), alle Selftests grün.
 
+## Phase 8 — Trackpad-/Maus-Klänge ✅ (2026-09-24)
+- Machbarkeit: der vorhandene listen-only Tap empfängt zusätzlich
+  Maus-Down/Up (links/rechts/andere) und `scrollWheel` — keine neue
+  Berechtigung. Per Probe mit Scroll-Event (Weg 0) bestätigt; echte Klicks
+  des Entwicklers noch nicht gemessen (Probe lief ohne Nutzung).
+- Aufnahmen: `mouse-packs/` (Magic Mouse, MX Master 3S ×2, Logitech Lift,
+  M553) aus `ognistik/alfred-taptix`, MIT, Download freigegeben. `info.json`
+  je Set; Scroll-Tick wird beim Laden aus 12 ms ab Onset des Press-Sounds
+  erzeugt (oder `scroll.wav`).
+- `KeyEvent`: Kinds `.pointerDown/.pointerUp/.scroll`, Felder `button`,
+  `pressure`, `scrollDelta`, `continuous`, `scrollPhase`, `momentum`.
+  Tap-Callback liest nur Felder (allokationsfrei).
+- `Pipeline.handlePointer`: Klick → Press-/Release-Sample, Gain aus
+  `kCGMouseEventPressure` (−6…0 dB; Maus meldet 1 → voll), Release −3 dB;
+  Scroll: Trackpad akkumuliert 28 pt pro Tick, Mausrad ein Tick pro Rastung,
+  min. 30 ms Abstand, Nachschwung −7 dB, Flicks puffern keine Tick-Salve.
+  Atomare Schalter `pointerSounds` (an), `scrollTicks` (aus).
+- Popover: „Trackpad clicks" + Klangauswahl, „Scroll ticks", Hinweis-Link
+  „Silent clicking" → Trackpad-Einstellungen. Persistenz `pointerSounds`,
+  `scrollTicks`, `mouseSet` (Default MX Master 3S).
+- Statistik zählt Klicks und Scroll-Strecke.
+- `--selftest-pointer`: injiziert Events direkt in den Ring (kein
+  `CGEventPost` — würde unter dem Mauszeiger klicken): 20/20 Press, 20/20
+  Release, 19 Ticks (14 Trackpad + 5 Rad), fest vs. leicht +4,8 dB, PASS.
+  `--diag --all` zeigt `pd/pu/sc`-Zeilen.
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.

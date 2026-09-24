@@ -122,7 +122,19 @@ final class TypingStats {
 
     func record(_ e: KeyEvent, now: Date = Date()) {
         if e.synthetic != 0 && !countSynthetic { return }
-        guard e.kind == .keyDown, e.autorepeat == 0 else { return }
+        switch e.kind {
+        case .pointerDown:
+            recordClick(now: now)
+            return
+        case .scroll:
+            recordScroll(points: Double(e.scrollDelta), now: now)
+            return
+        case .keyDown:
+            break
+        default:
+            return
+        }
+        guard e.autorepeat == 0 else { return }
         lock.lock()
         defer { lock.unlock() }
         guard enabledFlag else { return }

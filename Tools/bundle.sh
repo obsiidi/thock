@@ -31,6 +31,7 @@ printf 'APPL????' > "$APP/Contents/PkgInfo"
 cp -R packs "$APP/Contents/Resources/packs"
 rm -f "$APP/Contents/Resources/packs/.gitkeep"
 cp Samples/click.wav "$APP/Contents/Resources/Samples/click.wav"
+cp -R mouse-packs "$APP/Contents/Resources/mouse-packs"
 mkdir -p "$APP/Contents/Resources/fonts"
 cp site/fonts/*.woff2 site/fonts/OFL-*.txt "$APP/Contents/Resources/fonts/"
 

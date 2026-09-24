@@ -340,7 +340,7 @@ enum SoundpackLoader {
 
     /// Scales all buffers by one factor so the loudest peak sits at
     /// `targetPeak`; relative loudness between keys is preserved.
-    private static func normalize(_ buffers: [AVAudioPCMBuffer]) {
+    static func normalize(_ buffers: [AVAudioPCMBuffer]) {
         var peak: Float = 0
         for b in buffers {
             guard let data = b.floatChannelData else { continue }
@@ -360,5 +360,69 @@ enum SoundpackLoader {
                 }
             }
         }
+    }
+}
+
+// MARK: - Mouse / trackpad sound sets
+
+/// A pointer sound set: press, release and a short scroll tick, all
+/// registered in the VoiceMixer sample table.
+struct MouseSet {
+    let id: String
+    let name: String
+    let down: Int32
+    let up: Int32
+    let tick: Int32
+
+    /// Folder layout: `down.wav`, `up.wav`, optional `scroll.wav`,
+    /// optional `info.json` with {"name": "..."}.
+    static func load(directory: URL, mixer: VoiceMixer, format: AVAudioFormat) throws -> MouseSet {
+        let down = try SoundpackLoader.decode(directory.appendingPathComponent("down.wav"), format: format)
+        let up = try SoundpackLoader.decode(directory.appendingPathComponent("up.wav"), format: format)
+        let scrollURL = directory.appendingPathComponent("scroll.wav")
+        let tick = FileManager.default.fileExists(atPath: scrollURL.path)
+            ? try SoundpackLoader.decode(scrollURL, format: format)
+            : makeTick(from: down)
+        SoundpackLoader.normalize([down, up])
+        let i0 = mixer.register(down), i1 = mixer.register(up), i2 = mixer.register(tick)
+        guard i0 >= 0, i1 >= 0, i2 >= 0 else { throw SoundpackError.noSamples }
+        return MouseSet(id: directory.lastPathComponent, name: displayName(directory), down: i0, up: i1, tick: i2)
+    }
+
+    static func displayName(_ directory: URL) -> String {
+        if let data = FileManager.default.contents(atPath: directory.appendingPathComponent("info.json").path),
+           let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let name = obj["name"] as? String, !name.isEmpty {
+            return name
+        }
+        return directory.lastPathComponent
+    }
+
+    /// 12 ms from the onset of the press sound, faded out, at a fixed low
+    /// level: a small detent-like tick for scrolling.
+    static func makeTick(from source: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
+        let rate = source.format.sampleRate
+        let frames = Int(source.frameLength)
+        let channels = Int(source.format.channelCount)
+        guard let src = source.floatChannelData, frames > 0 else { return source }
+        var peak: Float = 0
+        for ch in 0..<channels { for i in 0..<frames { peak = max(peak, abs(src[ch][i])) } }
+        var onset = 0
+        search: for i in 0..<frames {
+            for ch in 0..<channels where abs(src[ch][i]) > peak * 0.1 { onset = i; break search }
+        }
+        let start = max(0, onset - Int(rate * 0.001))
+        let length = min(frames - start, Int(rate * 0.012))
+        guard length > 8, let out = AVAudioPCMBuffer(pcmFormat: source.format, frameCapacity: AVAudioFrameCount(length)),
+              let dst = out.floatChannelData else { return source }
+        out.frameLength = AVAudioFrameCount(length)
+        let level: Float = peak > 0 ? SoundpackLoader.targetPeak * 0.45 / peak : 1
+        for ch in 0..<channels {
+            for i in 0..<length {
+                let fade = Float(length - i) / Float(length)
+                dst[ch][i] = src[ch][start + i] * level * fade * fade
+            }
+        }
+        return out
     }
 }

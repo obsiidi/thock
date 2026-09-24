@@ -23,6 +23,7 @@ enum Mode {
     case stats
     case statsCard
     case selftestStats
+    case selftestPointer
 }
 
 var mode: Mode = .app
@@ -63,6 +64,8 @@ while !args.isEmpty {
         mode = .stats
     case "--selftest-stats":
         mode = .selftestStats
+    case "--selftest-pointer":
+        mode = .selftestPointer
     case "--stats-card":
         guard let v = args.first else {
             stderrLine("thock: --stats-card needs an output path")
@@ -200,6 +203,7 @@ case .help:
       --stats               print the local typing stats summary
       --stats-card PATH     render this week's share card as PNG
       --selftest-stats      synthetic keystrokes -> stats counters and file; exit 0/1
+      --selftest-pointer    synthetic clicks and scrolls -> mouse sounds; exit 0/1
       --selftest-tap        capture-only self-test, no audio; exit 0/1
         --count N           keystrokes per burst (default 20)
         --idle S            seconds between the two bursts (default 60)
@@ -231,6 +235,8 @@ case .statsCard:
     exit(runStatsCard(path: cardPath))
 case .selftestStats:
     exit(runStatsSelftest(count: count ?? 30))
+case .selftestPointer:
+    exit(runPointerSelftest(clicks: count ?? 20))
 case .autostart:
     exit(runAutostart(autostartArg))
 case .listPacks:

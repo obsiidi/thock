@@ -83,6 +83,16 @@ final class AudioEngine {
         return p
     }
 
+    private(set) var mouse: MouseSet?
+
+    /// Loads a mouse/trackpad sound set into the sample table.
+    @discardableResult
+    func loadMouse(directory: URL) throws -> MouseSet {
+        let m = try MouseSet.load(directory: directory, mixer: mixer, format: format)
+        mouse = m
+        return m
+    }
+
     /// Loads the built-in click as a one-sample pack. Before start().
     @discardableResult
     func loadBuiltInClick(url: URL) throws -> Soundpack {

@@ -87,10 +87,12 @@ final class KeyTap {
     }
 
     private func threadMain() {
-        let mask: CGEventMask =
-            (1 << CGEventType.keyDown.rawValue) |
-            (1 << CGEventType.keyUp.rawValue) |
-            (1 << CGEventType.flagsChanged.rawValue)
+        var mask: CGEventMask = 0
+        for t: CGEventType in [.keyDown, .keyUp, .flagsChanged,
+                               .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp,
+                               .otherMouseDown, .otherMouseUp, .scrollWheel] {
+            mask |= CGEventMask(1) << CGEventMask(t.rawValue)
+        }
 
         guard let port = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -156,6 +158,12 @@ private func keyTapCallback(
         kind = .keyUp
     case .flagsChanged:
         kind = .flagsChanged
+    case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+        kind = .pointerDown
+    case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+        kind = .pointerUp
+    case .scrollWheel:
+        kind = .scroll
     case .tapDisabledByTimeout, .tapDisabledByUserInput:
         if let port = tap.port {
             CGEvent.tapEnable(tap: port, enable: true)
@@ -171,9 +179,22 @@ private func keyTapCallback(
     var e = KeyEvent()
     e.received = mach_absolute_time()
     e.kind = kind
-    e.keyCode = UInt16(truncatingIfNeeded: event.getIntegerValueField(.keyboardEventKeycode))
-    e.autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0 ? 1 : 0
     e.synthetic = event.getIntegerValueField(.eventSourceUserData) == syntheticMarker ? 1 : 0
+    switch kind {
+    case .keyDown, .keyUp, .flagsChanged:
+        e.keyCode = UInt16(truncatingIfNeeded: event.getIntegerValueField(.keyboardEventKeycode))
+        e.autorepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0 ? 1 : 0
+    case .pointerDown, .pointerUp:
+        e.button = UInt8(truncatingIfNeeded: event.getIntegerValueField(.mouseEventButtonNumber))
+        e.pressure = Float(event.getDoubleValueField(.mouseEventPressure))
+    case .scroll:
+        let dy = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis1)
+        let dx = event.getDoubleValueField(.scrollWheelEventPointDeltaAxis2)
+        e.scrollDelta = Float((dx * dx + dy * dy).squareRoot())
+        e.continuous = event.getIntegerValueField(.scrollWheelEventIsContinuous) != 0 ? 1 : 0
+        e.scrollPhase = UInt8(truncatingIfNeeded: event.getIntegerValueField(.scrollWheelEventScrollPhase))
+        e.momentum = UInt8(truncatingIfNeeded: event.getIntegerValueField(.scrollWheelEventMomentumPhase))
+    }
     e.flags = event.flags.rawValue
     e.timestamp = event.timestamp
     let s = catomic_load_relaxed(tap.seq)

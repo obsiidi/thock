@@ -7,6 +7,9 @@ struct KeyEvent {
         case keyDown = 0
         case keyUp = 1
         case flagsChanged = 2
+        case pointerDown = 3
+        case pointerUp = 4
+        case scroll = 5
     }
 
     var kind: Kind = .keyDown
@@ -38,6 +41,18 @@ struct KeyEvent {
     var gainDb: Float = 0
     /// 1 if `force` came from a real sensor reading (not neutral/fixed).
     var forceMeasured: UInt8 = 0
+    // Pointer events
+    /// Mouse button number (0 left, 1 right, 2+ other).
+    var button: UInt8 = 0
+    /// kCGMouseEventPressure (Force Touch trackpads report 0…1).
+    var pressure: Float = 0
+    /// Scroll distance of this event in points (always ≥ 0).
+    var scrollDelta: Float = 0
+    /// 1 = trackpad / Magic Mouse (continuous), 0 = wheel with detents.
+    var continuous: UInt8 = 0
+    /// Scroll phase / momentum phase as delivered (0 = none).
+    var scrollPhase: UInt8 = 0
+    var momentum: UInt8 = 0
 }
 
 /// Single-producer / single-consumer ring buffer with fixed capacity.

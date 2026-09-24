@@ -54,6 +54,15 @@ func stderrLine(_ s: String) {
 func formatLine(_ e: KeyEvent) -> String {
     let kind: String
     switch e.kind {
+    case .pointerDown, .pointerUp:
+        let sample = e.sample < 0 ? "-" : "\(e.sample)"
+        return "\(e.kind == .pointerDown ? "pd" : "pu") button=\(e.button) pressure=\(String(format: "%.3f", e.pressure)) "
+            + "sample=\(sample) gain_db=\(e.sample < 0 ? "-" : String(format: "%.1f", e.gainDb)) syn=\(e.synthetic) "
+            + "lat_us=\(Clock.latMicros(e).map(String.init) ?? "-")"
+    case .scroll:
+        let tick = e.sample < 0 ? "-" : "\(e.sample)"
+        return "sc delta=\(String(format: "%.1f", e.scrollDelta)) continuous=\(e.continuous) phase=\(e.scrollPhase) "
+            + "momentum=\(e.momentum) tick=\(tick) gain_db=\(e.sample < 0 ? "-" : String(format: "%.1f", e.gainDb))"
     case .keyDown: kind = "kd"
     case .keyUp: kind = "ku"
     case .flagsChanged: kind = "fc"
@@ -263,7 +272,7 @@ enum PackSelection {
 
 /// Engine with the pack loaded; `start` false leaves the engine stopped
 /// (for --map / --list-packs, which only need the sample tables).
-func makeAudio(_ selection: PackSelection, bufferFrames: UInt32, start: Bool = true) -> AudioEngine? {
+func makeAudio(_ selection: PackSelection, bufferFrames: UInt32, start: Bool = true, mouse: URL? = nil) -> AudioEngine? {
     do {
         let audio = try AudioEngine(bufferFrames: bufferFrames)
         switch selection {
@@ -271,6 +280,13 @@ func makeAudio(_ selection: PackSelection, bufferFrames: UInt32, start: Bool = t
             try audio.loadBuiltInClick(url: URL(fileURLWithPath: path))
         case .directory(let url):
             try audio.load(packDirectory: url)
+        }
+        if let m = mouse {
+            do {
+                try audio.loadMouse(directory: m)
+            } catch {
+                stderrLine("thock: mouse sounds unavailable (\(m.lastPathComponent)): \(error)")
+            }
         }
         if start {
             try audio.start()
@@ -318,6 +334,8 @@ final class DiagStats {
     private var keyUps = 0
     private var flagChanges = 0
     private var repeats = 0
+    private var clicks = 0
+    private var scrolls = 0
 
     func record(_ e: KeyEvent) {
         lock.lock()
@@ -327,6 +345,9 @@ final class DiagStats {
             if e.autorepeat != 0 { repeats += 1 }
         case .keyUp: keyUps += 1
         case .flagsChanged: flagChanges += 1
+        case .pointerDown: clicks += 1
+        case .pointerUp: break
+        case .scroll: scrolls += 1
         }
         lock.unlock()
     }
@@ -334,7 +355,7 @@ final class DiagStats {
     func summary() -> String {
         lock.lock()
         defer { lock.unlock() }
-        return "keyDown=\(keyDowns) (repeat=\(repeats)) keyUp=\(keyUps) flagsChanged=\(flagChanges)"
+        return "keyDown=\(keyDowns) (repeat=\(repeats)) keyUp=\(keyUps) flagsChanged=\(flagChanges) clicks=\(clicks) scrollEvents=\(scrolls)"
     }
 }
 
@@ -347,7 +368,8 @@ enum LogMode {
 
 func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, velocity: Bool, log: LogMode?) -> Int32 {
     guard ensureListenPermission() else { return 2 }
-    guard let audio = makeAudio(selection, bufferFrames: bufferFrames), let pack = audio.pack else { return 4 }
+    let mouseDir = (Resources.mouseEntries().first { $0.id == "mx-master-3s" } ?? Resources.mouseEntries().first)?.directory
+    guard let audio = makeAudio(selection, bufferFrames: bufferFrames, mouse: mouseDir), let pack = audio.pack else { return 4 }
 
     var motion: MotionSensor?
     if velocity && MotionSensor.isAvailable() {
@@ -361,6 +383,7 @@ func runMain(_ selection: PackSelection, bufferFrames: UInt32, jitter: Float, ve
     }
     let pipeline = Pipeline(audio: audio, pack: pack, motion: motion)
     pipeline.jitter = jitter
+    pipeline.scrollTicks = true
     let stats = DiagStats()
     let drain = Drain(ring: pipeline.logRing) { e in
         stats.record(e)
@@ -1145,5 +1168,97 @@ func runStatsSelftest(count: Int) -> Int32 {
         return 0
     }
     failures.forEach { print("selftest-stats: FAIL — \($0)") }
+    return 1
+}
+
+// MARK: - --selftest-pointer
+
+/// Pushes synthetic pointer events straight into the pipeline's ring —
+/// never through CGEventPost, which would click whatever is under the
+/// cursor — and checks that clicks and scroll ticks reach the mixer.
+func runPointerSelftest(clicks: Int = 20) -> Int32 {
+    guard ensureListenPermission() else { return 2 }
+    guard let entry = Resources.mouseEntries().first(where: { $0.id == "mx-master-3s" }) ?? Resources.mouseEntries().first else {
+        print("selftest-pointer: FAIL — no mouse sound sets found in \(Resources.mouseRoot.path)")
+        return 4
+    }
+    guard let audio = makeAudio(.builtIn(clickPath: Resources.clickURL.path), bufferFrames: 128, mouse: entry.directory),
+          let pack = audio.pack, let mouse = audio.mouse else { return 4 }
+    let probe = MixerProbe(sampleRate: audio.format.sampleRate)
+    probe.install(on: audio.engine.mainMixerNode)
+    let pipeline = Pipeline(audio: audio, pack: pack)
+    pipeline.jitter = 0
+    pipeline.scrollTicks = true
+    let collector = EventCollector()
+    let drain = Drain(ring: pipeline.logRing) { collector.add($0) }
+    do { try pipeline.start() } catch {
+        stderrLine("selftest-pointer: \(error)")
+        return 3
+    }
+    drain.start()
+    usleep(400_000)
+    stderrLine("selftest-pointer: set=\"\(mouse.name)\" down=#\(mouse.down) up=#\(mouse.up) tick=#\(mouse.tick)")
+
+    func inject(_ fill: (inout KeyEvent) -> Void) {
+        var e = KeyEvent()
+        e.synthetic = 1
+        e.received = mach_absolute_time()
+        e.timestamp = Clock.nowNanos()
+        fill(&e)
+        _ = pipeline.tapRing.push(e)
+        pipeline.tap.wake.signal()
+    }
+    // Clicks: alternating light and firm pressure.
+    for i in 0..<clicks {
+        inject { $0.kind = .pointerDown; $0.pressure = i % 2 == 0 ? 0.2 : 1.0 }
+        usleep(40_000)
+        inject { $0.kind = .pointerUp; $0.pressure = 0 }
+        usleep(160_000)
+    }
+    // Trackpad scroll: 40 events × 10 pt, 20 ms apart = 400 pt -> 14 ticks.
+    inject { $0.kind = .scroll; $0.continuous = 1; $0.scrollPhase = 1; $0.scrollDelta = 0 }
+    for _ in 0..<40 {
+        usleep(20_000)
+        inject { $0.kind = .scroll; $0.continuous = 1; $0.scrollPhase = 2; $0.scrollDelta = 10 }
+    }
+    usleep(500_000)
+    // Mouse wheel: 5 detents 80 ms apart -> 5 ticks.
+    for _ in 0..<5 {
+        inject { $0.kind = .scroll; $0.continuous = 0; $0.scrollDelta = 1 }
+        usleep(80_000)
+    }
+    usleep(600_000)
+    probe.remove()
+    pipeline.stop()
+    drain.stop()
+    audio.stop()
+
+    var starts: [VoiceCommand] = []
+    while let c = audio.mixer.startLog.pop() { starts.append(c) }
+    let downs = starts.filter { $0.sample == mouse.down }
+    let ups = starts.filter { $0.sample == mouse.up }
+    let ticks = starts.filter { $0.sample == mouse.tick }
+    let lightGain = downs.enumerated().filter { $0.offset % 2 == 0 }.map { $0.element.gain }
+    let firmGain = downs.enumerated().filter { $0.offset % 2 == 1 }.map { $0.element.gain }
+    let lightDb = 20 * log10(Double(lightGain.first ?? 1)), firmDb = 20 * log10(Double(firmGain.first ?? 1))
+    let events = collector.snapshot
+    let latencies = events.filter { $0.scheduled != 0 }.compactMap(Clock.latMicros)
+    let lat = Percentiles(latencies)
+
+    print("selftest-pointer: downs=\(downs.count)/\(clicks) ups=\(ups.count)/\(clicks) ticks=\(ticks.count) (expected 14 trackpad + 5 wheel) "
+        + "voices=\(audio.mixer.voicesStarted) mixer_peak=\(String(format: "%.3f", probe.peak)) "
+        + "gain light=\(String(format: "%.1f", lightDb)) dB firm=\(String(format: "%.1f", firmDb)) dB")
+    print("selftest-pointer: lat_us \(lat.description) (event -> command queued)")
+    var failures: [String] = []
+    if downs.count != clicks { failures.append("press sounds \(downs.count), expected \(clicks)") }
+    if ups.count != clicks { failures.append("release sounds \(ups.count), expected \(clicks)") }
+    if ticks.count < 17 || ticks.count > 21 { failures.append("scroll ticks \(ticks.count), expected 19 ±2") }
+    if !(firmDb > lightDb + 3) { failures.append("firm click not louder than light click") }
+    if probe.peak < 0.05 { failures.append("mixer stayed silent") }
+    if failures.isEmpty {
+        print("selftest-pointer: PASS")
+        return 0
+    }
+    failures.forEach { print("selftest-pointer: FAIL — \($0)") }
     return 1
 }
