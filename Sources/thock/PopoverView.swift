@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct PopoverView: View {
     @ObservedObject var state: AppState
     var showSetup: () -> Void = {}
+    var showStats: () -> Void = {}
     @State private var dropTargeted = false
 
     var body: some View {
@@ -88,6 +89,21 @@ struct PopoverView: View {
                 .buttonStyle(.link)
             }
 
+            if state.keepStats {
+                Button {
+                    showStats()
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "chart.bar.xaxis")
+                        Text(state.todayLine.isEmpty ? "Typing stats" : state.todayLine)
+                            .lineLimit(1)
+                    }
+                    .font(.caption)
+                }
+                .buttonStyle(.link)
+                .help("Your typing stats — counted on this Mac, never uploaded.")
+            }
+
             Text(state.status)
                 .font(.caption)
                 .foregroundColor(.secondary)
@@ -98,6 +114,7 @@ struct PopoverView: View {
             HStack(spacing: 10) {
                 Text("v\(state.version)").font(.caption).foregroundColor(.secondary)
                 Button("Setup") { showSetup() }.buttonStyle(.link).font(.caption)
+                Button("Stats") { showStats() }.buttonStyle(.link).font(.caption)
                 Button("Packs folder") { state.revealPacksFolder() }.buttonStyle(.link).font(.caption)
                 Button("Feedback") { state.openFeedback() }.buttonStyle(.link).font(.caption)
                 Spacer()
@@ -109,6 +126,7 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 320)
+        .onAppear { state.refreshTodayLine() }
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.accentColor, lineWidth: dropTargeted ? 2 : 0)

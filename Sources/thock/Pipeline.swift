@@ -186,6 +186,7 @@ final class Pipeline {
                         e.sample = sample
                         e.rate = rate
                         e.force = velocityOn ? force : 1
+                        e.forceMeasured = e.pressed == 1 && velocity.lastMeasured ? 1 : 0
                         e.gainDb = gainDb
                         e.scheduled = mach_absolute_time()
                         catomic_store_release(triggered, catomic_load_relaxed(triggered) &+ 1)

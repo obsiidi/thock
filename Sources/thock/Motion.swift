@@ -262,6 +262,8 @@ final class VelocityEstimator {
     /// Decay of the running maximum: halves every `halfLifeSeconds`.
     var halfLifeSeconds: Double = 60
     private var runningMax: Float = 0.02        // g; sane start for a light typist
+    /// Whether the last `force` call was backed by a sensor reading.
+    private(set) var lastMeasured = false
     private var lastUpdateTicks: UInt64 = 0
     private let sensitivityBits: UnsafeMutablePointer<UInt64>
     private let enabledFlag: UnsafeMutablePointer<UInt64>
@@ -302,6 +304,7 @@ final class VelocityEstimator {
     /// Force 0…1 for an event. Updates the running maximum.
     @inline(__always)
     func force(eventNanos: UInt64, nowTicks: UInt64) -> Float {
+        lastMeasured = false
         guard enabled, let sensor = sensor else { return 1 }
         let raw = peak(eventNanos: eventNanos)
         let floor = sensor.noiseFloor * 2
@@ -309,6 +312,7 @@ final class VelocityEstimator {
         // Nothing above the noise floor: external keyboard or synthetic
         // event — no impact information, play at a neutral level.
         if signal <= 0 { return 0.5 }
+        lastMeasured = true
         // Decay the running max toward the floor, then let this hit raise it.
         if lastUpdateTicks != 0 {
             let dt = Double(Clock.ticksToNanos(nowTicks &- lastUpdateTicks)) / 1e9

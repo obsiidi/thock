@@ -341,6 +341,34 @@ kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
 (Designentscheidung). `privacy.html` im selben Stil. Geprüft: Desktop, 375 px
 (Nav ausgeblendet), Fonts geladen, nur Same-Origin-Requests, Demo reagiert.
 
+## Phase 7 — Tipp-Statistik ✅ (2026-09-24)
+- `Stats.swift`: `TypingStats` zählt im **Drain-Thread** (nie im Echtzeit-
+  Pfad) pro Tag: Anschläge, Anschläge je Taste (128er-Array), aktive Minuten
+  (1440-Bit-Maske), Spitzen-Tempo (gleitendes 60-s-Fenster), Kraft-Histogramm
+  und mittlere Kraft je Taste (nur echte Sensor-Messungen:
+  `KeyEvent.forceMeasured`, gesetzt aus `VelocityEstimator.lastMeasured`),
+  Klicks/Scroll (für Phase 8). Keine Zeichenfolgen, keine Zeitstempel je
+  Taste. JSON in `~/Library/Application Support/thock/stats.json`, Autosave
+  60 s + beim Beenden, 400 Tage, tolerantes Decoding. `THOCK_STATS_FILE`
+  überschreibt den Pfad (Tests).
+- `KeyboardLayout.swift`: MacBook-Geometrie (alle Reihen 14,5 Einheiten),
+  ISO/ANSI-Erkennung, Tastenbeschriftung über `UCKeyTranslate` (zeigt
+  QWERTZ, Umlaute, ß). **Fix nebenbei:** Auf Apple-ISO-Tastaturen sind
+  Keycode 10/50 physisch vertauscht → `Scancodes.table` tauscht sie, damit
+  `^` und `<` den richtigen Pack-Klang bekommen.
+- `StatsView.swift`: Fenster (Kennzahlen, Heute/7-Tage, Heatmap, 14-Tage-
+  Chart, Kraftverteilung, Rekorde, „Keep typing stats", Reset mit Rückfrage,
+  Copy/Save/Share). Teilen-Karte 1200×630 @2× im Website-Stil mit Dot-Matrix-
+  Wortmarke und Heatmap; Fonts (Archivo, JetBrains Mono, OFL) werden als WOFF2
+  per CoreText registriert und ins Bundle kopiert.
+- Popover: Zeile „Today … keys · … wpm peak · …-day streak" → Fenster,
+  Footer-Link „Stats".
+- CLI: `--stats`, `--stats-card PATH`, `--selftest-stats` (30 synthetische
+  F20 → exakt 30 Anschläge, F20-Slot 30, Spitze 30/min, Datei neu geladen
+  identisch).
+- Geprüft: Karte gerendert und angesehen, Fenster per Accessibility
+  ausgelesen (Werte, Heatmap-Labels, Rekorde), alle Selftests grün.
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.

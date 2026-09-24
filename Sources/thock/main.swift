@@ -20,6 +20,9 @@ enum Mode {
     case autostart
     case diagMotion
     case motionSelftest
+    case stats
+    case statsCard
+    case selftestStats
 }
 
 var mode: Mode = .app
@@ -36,6 +39,7 @@ let defaultPack = "topre-purple-hybrid-pbt"
 var ioFrames: UInt32 = 128
 var jitter: Float = 0.03
 var velocity = true
+var cardPath = "thock-week.png"
 
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
@@ -55,6 +59,18 @@ while !args.isEmpty {
         mode = .motionSelftest
     case "--no-velocity":
         velocity = false
+    case "--stats":
+        mode = .stats
+    case "--selftest-stats":
+        mode = .selftestStats
+    case "--stats-card":
+        guard let v = args.first else {
+            stderrLine("thock: --stats-card needs an output path")
+            exit(64)
+        }
+        args.removeFirst()
+        cardPath = v
+        mode = .statsCard
     case "--all":
         printAll = true
     case "--selftest":
@@ -181,6 +197,9 @@ case .help:
                             keystroke (no key codes logged); Ctrl-C = summary
       --motion-selftest     10 light + 10 hard hits, PASS if clearly separated
       --no-velocity         ignore the accelerometer (fixed loudness)
+      --stats               print the local typing stats summary
+      --stats-card PATH     render this week's share card as PNG
+      --selftest-stats      synthetic keystrokes -> stats counters and file; exit 0/1
       --selftest-tap        capture-only self-test, no audio; exit 0/1
         --count N           keystrokes per burst (default 20)
         --idle S            seconds between the two bursts (default 60)
@@ -206,6 +225,12 @@ case .diagMotion:
     exit(runDiagMotion())
 case .motionSelftest:
     exit(runMotionSelftest(hitsPerGroup: count ?? 10))
+case .stats:
+    exit(runStats())
+case .statsCard:
+    exit(runStatsCard(path: cardPath))
+case .selftestStats:
+    exit(runStatsSelftest(count: count ?? 30))
 case .autostart:
     exit(runAutostart(autostartArg))
 case .listPacks:

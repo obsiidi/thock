@@ -14,6 +14,7 @@ final class AppState: ObservableObject {
         static let velocity = "velocity"
         static let sensitivity = "sensitivity"
         static let onboarded = "onboarded"
+        static let keepStats = "keepStats"
     }
 
     @Published var packs: [Resources.PackEntry] = []
@@ -71,6 +72,17 @@ final class AppState: ObservableObject {
     }
     var version: String { UpdateChecker.currentVersion }
 
+    /// Local typing statistics (counts only), fed from the drain thread.
+    let typing = TypingStats()
+    @Published var keepStats: Bool {
+        didSet {
+            defaults.set(keepStats, forKey: Keys.keepStats)
+            typing.enabled = keepStats
+        }
+    }
+    @Published var todayLine = ""
+    private var statsTimer: Timer?
+
     let verbose: Bool
     let bufferFrames: UInt32
     private let defaults = UserDefaults.standard
@@ -94,6 +106,14 @@ final class AppState: ObservableObject {
         enabled = defaults.object(forKey: Keys.enabled) as? Bool ?? true
         velocityEnabled = defaults.object(forKey: Keys.velocity) as? Bool ?? true
         sensitivitySlider = defaults.object(forKey: Keys.sensitivity) as? Double ?? 0.5
+        keepStats = defaults.object(forKey: Keys.keepStats) as? Bool ?? true
+        typing.enabled = keepStats
+        typing.startAutosave()
+    }
+
+    /// Refreshes the one-line summary shown in the popover.
+    func refreshTodayLine() {
+        todayLine = keepStats ? StatsFormat.todayLine(typing.summary()) : ""
     }
 
     // MARK: lifecycle
@@ -110,6 +130,14 @@ final class AppState: ObservableObject {
                 guard let u = update else { return }
                 DispatchQueue.main.async { self.update = u }
             }
+        }
+    }
+
+    func startStatsTicker() {
+        refreshTodayLine()
+        statsTimer?.invalidate()
+        statsTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+            self?.refreshTodayLine()
         }
     }
 
@@ -180,6 +208,7 @@ final class AppState: ObservableObject {
         queue.sync {
             teardownAll()
         }
+        typing.flush()
     }
 
     /// Summary for the log when the app exits.
@@ -270,8 +299,10 @@ final class AppState: ObservableObject {
             pipeline.velocity.sensitivity = Float(0.3 * pow(10, sensitivitySlider))
             let stats = DiagStats()
             let verbose = self.verbose
+            let typing = self.typing
             let drain = Drain(ring: pipeline.logRing) { e in
                 stats.record(e)
+                typing.record(e)
                 if verbose { print(formatLine(e)) }
             }
             do {

@@ -36,6 +36,8 @@ struct KeyEvent {
     var force: Float = 1
     /// Gain applied to the voice, in dB.
     var gainDb: Float = 0
+    /// 1 if `force` came from a real sensor reading (not neutral/fixed).
+    var forceMeasured: UInt8 = 0
 }
 
 /// Single-producer / single-consumer ring buffer with fixed capacity.

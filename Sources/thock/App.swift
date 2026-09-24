@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var signalSources: [DispatchSourceSignal] = []
     private var enabledObserver: AnyCancellable?
     private let onboarding = OnboardingWindow()
+    private let statsWindow = StatsWindow()
 
     init(state: AppState) {
         self.state = state
@@ -41,10 +42,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = NSPopover()
         popover.behavior = .transient
         popover.animates = false
-        popover.contentViewController = NSHostingController(rootView: PopoverView(state: state) { [weak self] in
+        popover.contentViewController = NSHostingController(rootView: PopoverView(state: state, showSetup: { [weak self] in
             self?.popover.performClose(nil)
             self?.showOnboarding()
-        })
+        }, showStats: { [weak self] in
+            guard let self = self else { return }
+            self.popover.performClose(nil)
+            self.statsWindow.show(state: self.state)
+        }))
 
         for sig in [SIGTERM, SIGINT] {
             signal(sig, SIG_IGN)
@@ -55,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         state.start()
+        state.startStatsTicker()
         if !state.onboarded || !CGPreflightListenEventAccess() {
             showOnboarding()
         }

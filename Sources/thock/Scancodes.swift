@@ -144,6 +144,12 @@ enum Scancodes {
         set(89, 0x47)    // 7
         set(91, 0x48)    // 8
         set(92, 0x49)    // 9
+
+        // Apple ISO boards (e.g. German) report the top-left key as 10 and
+        // the key left of Z as 50 — swap so each gets its physical sound.
+        if KeyboardLayout.isISO {
+            t.swapAt(10, 50)
+        }
         return t
     }()
 

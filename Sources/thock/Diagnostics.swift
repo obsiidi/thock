@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import CoreGraphics
 import AVFoundation
@@ -1055,5 +1056,94 @@ func runTapSelftest(count: Int, idleSeconds: Double) -> Int32 {
     for f in failures {
         print("selftest-tap: FAIL — \(f)")
     }
+    return 1
+}
+
+// MARK: - --stats / --stats-card / --selftest-stats
+
+func printStatsSummary(_ s: StatsSummary, labels: [String]) {
+    let active = TypingStats.activeMinutes(Array(s.last14.suffix(7)))
+    print("stats: today keys=\(s.today.keys) peak_wpm=\(s.today.peakWPM) active_min=\(s.today.activeMinuteCount) "
+        + "clicks=\(s.today.clicks) force_samples=\(s.today.forceSamples)")
+    print("stats: week  keys=\(s.week.keys) peak_wpm=\(s.week.peakWPM) active_min=\(active) streak=\(s.streak)")
+    print("stats: all   keys=\(s.totalKeys) days=\(s.totalDays) best_day=\(s.bestDayKeys) (\(s.bestDayDate ?? "-")) best_wpm=\(s.bestWPM)")
+    let top = s.week.perKey.enumerated().filter { $0.element > 0 }.sorted { $0.element > $1.element }.prefix(5)
+    print("stats: top keys (7 d): " + top.map { "\(labels[$0.offset])=\($0.element)" }.joined(separator: " "))
+    if let hk = s.week.hardestKey {
+        print("stats: hardest-hit key (7 d): \(labels[hk.keyCode]) avg_force=\(String(format: "%.2f", hk.force))")
+    }
+    print("stats: line: \(StatsFormat.todayLine(s))")
+}
+
+func runStats() -> Int32 {
+    let stats = TypingStats()
+    print("stats: file \(stats.fileURL.path)")
+    printStatsSummary(stats.summary(), labels: KeyboardLayout.labels())
+    return 0
+}
+
+func runStatsCard(path: String) -> Int32 {
+    _ = NSApplication.shared
+    let stats = TypingStats()
+    let summary = stats.summary()
+    let data: Data? = MainActor.assumeIsolated {
+        ShareCard.render(summary: summary, labels: KeyboardLayout.labels()).flatMap(ShareCard.pngData)
+    }
+    guard let png = data else {
+        stderrLine("stats-card: rendering failed")
+        return 1
+    }
+    do {
+        try png.write(to: URL(fileURLWithPath: path))
+    } catch {
+        stderrLine("stats-card: \(error.localizedDescription)")
+        return 1
+    }
+    print("stats-card: wrote \(path) (\(png.count) bytes)")
+    return 0
+}
+
+/// Posts synthetic F20 keystrokes through the real tap and drain, counts
+/// them into a temporary stats file, reloads it and checks the numbers.
+func runStatsSelftest(count: Int) -> Int32 {
+    guard ensureListenPermission(), ensurePostPermission() else { return 2 }
+    guard let keys = SyntheticKeys() else { return 3 }
+    let file = FileManager.default.temporaryDirectory.appendingPathComponent("thock-stats-selftest-\(getpid()).json")
+    try? FileManager.default.removeItem(at: file)
+    let stats = TypingStats(fileURL: file, countSynthetic: true)
+
+    let ring = EventRing()
+    let tap = KeyTap(ring: ring)
+    let drain = Drain(ring: ring) { stats.record($0) }
+    do { try tap.start() } catch {
+        stderrLine("selftest-stats: tap failed: \(error)")
+        return 3
+    }
+    drain.start()
+    usleep(300_000)
+    keys.burst(count, spacingMicros: 50_000)
+    usleep(400_000)
+    drain.stop()
+    tap.stop()
+    stats.flush()
+
+    let before = stats.summary()
+    let reloaded = TypingStats(fileURL: file, countSynthetic: true).summary()
+    let fileBytes = (try? Data(contentsOf: file))?.count ?? 0
+    try? FileManager.default.removeItem(at: file)
+
+    print("selftest-stats: keys=\(before.today.keys)/\(count) f20=\(before.today.perKey[90]) peak_kpm=\(before.today.peakKPM) "
+        + "active_min=\(before.today.activeMinuteCount) file_bytes=\(fileBytes) reloaded_keys=\(reloaded.today.keys)")
+    var failures: [String] = []
+    if before.today.keys != count { failures.append("counted \(before.today.keys) keys, expected \(count)") }
+    if before.today.perKey[90] != count { failures.append("F20 slot \(before.today.perKey[90]), expected \(count)") }
+    if before.today.peakKPM != count { failures.append("peak per minute \(before.today.peakKPM), expected \(count)") }
+    if before.today.activeMinuteCount < 1 { failures.append("no active minute recorded") }
+    if reloaded.today != before.today { failures.append("reloaded day differs from saved day") }
+    if failures.isEmpty {
+        print("selftest-stats: PASS")
+        return 0
+    }
+    failures.forEach { print("selftest-stats: FAIL — \($0)") }
     return 1
 }
