@@ -176,7 +176,7 @@ main { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
 
 /* Trackpad + stats sections */
 .packs.mice { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
-.bust { width: min(440px, 100%); aspect-ratio: 880 / 1569; justify-self: end; }
+.bust { width: min(440px, 100%); aspect-ratio: 880 / 1568; justify-self: end; }
 .bust canvas { width: 100%; height: 100%; cursor: crosshair; }
 @media (max-width: 760px) {
   .bust { justify-self: center; max-width: 360px; }
