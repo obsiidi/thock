@@ -1,12 +1,14 @@
 // Tools/dotart.swift — renders photos in the dot-matrix style of site/portrait.png.
 // site/bust.png:
 //   swift Tools/dotart.swift IN.webp site/bust.png --crop 68,25,662,1180 --smear 594,1069,114,114,1,-1 \
-//     --fill 90,1078,266,106,25 --width 880 --pitch 6.5 --white 1.0 --black 0.125 --wp 0.32 --gamma 1.1 \
-//     --contrast 1.8 --sharpen 1.5 --fine 0.5 --cross 0.8 --soften 1
+//     --fill 90,1078,266,106,25 --width 880 --pitch 6.5 --white 1.0 --contrast 1.0 --black 0.13 --wp 0.50 \
+//     --gamma 1.2 --sharpen 0.8 --local 12,1.0 --dots 0.35 --fine 0.33 --cross 0.68 --arm 0.16
 // --patch copies texture from above, --smear continues it along a direction
 // (for diagonal folds), --fill paints a flat gray (for overlays on background).
-// --fine and --cross switch on the reference's tone ladder: dots, fine grid,
-// "+" crosses, mesh; --soften blurs the dots like the reference's soft blobs.
+// --fine/--cross/--dots switch on the reference's tone ladder: sparse dots,
+// full lattice, fine gray grid, "+" crosses that close into a white mesh.
+// --local adds large-radius contrast so the planes of a face read as depth;
+// keep most of the face in the gray range and only the lit ridges white.
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -24,6 +26,9 @@ var outW = 880; var pitch = 6.5; var gamma = 1.4; var contrast = 1.15; var lift 
 var sharpen = 0.9; var white = 0.9; var black = 0.0; var whitePoint = 1.0
 var fineAt = 2.0; var crossAt = 2.0     // tone thresholds for the fine grid and the crosses (off by default)
 var soften = 0.0                         // blur of the finished dots, like the soft blobs of the reference
+var localR = 0; var localAmt = 0.0       // large-radius local contrast: separates the planes of a face
+var dotsFull = 1.0                       // tone at which the dot lattice is complete (ladder mode)
+var crossWidth = 0.11                    // half-width of the cross arms, in pitches
 while !a.isEmpty {
     let k = a.removeFirst(), v = a.removeFirst()
     let n = v.split(separator: ",").compactMap { Double($0) }
@@ -44,6 +49,9 @@ while !a.isEmpty {
     case "--fine": fineAt = Double(v)!
     case "--cross": crossAt = Double(v)!
     case "--soften": soften = Double(v)!
+    case "--local": localR = Int(n[0]); localAmt = n[1]
+    case "--dots": dotsFull = Double(v)!
+    case "--arm": crossWidth = Double(v)!
     default: fatalError("unknown \(k)")
     }
 }
@@ -124,11 +132,22 @@ func bar(_ ax: Double, _ ay: Double, _ bx: Double, _ by: Double, _ hw: Double, _
 // engraving), contrast, gamma, highlight compression.
 let fw2 = cols * 2, fh2 = rows * 2
 func raw(_ x: Int, _ y: Int) -> Double { fine[min(fh2 - 1, max(0, y)) * fw2 + min(fw2 - 1, max(0, x))] }
+// summed-area table for the large local-contrast blur
+var sat = [Double](repeating: 0, count: (fw2 + 1) * (fh2 + 1))
+for y in 0..<fh2 { var rowSum = 0.0; for x in 0..<fw2 {
+    rowSum += fine[y * fw2 + x]; sat[(y + 1) * (fw2 + 1) + x + 1] = sat[y * (fw2 + 1) + x + 1] + rowSum
+} }
+func boxMean(_ fx: Int, _ fy: Int, _ r: Int) -> Double {
+    let x0 = max(0, fx - r), x1 = min(fw2, fx + r + 1), y0 = max(0, fy - r), y1 = min(fh2, fy + r + 1)
+    let s = sat[y1 * (fw2 + 1) + x1] - sat[y0 * (fw2 + 1) + x1] - sat[y1 * (fw2 + 1) + x0] + sat[y0 * (fw2 + 1) + x0]
+    return s / Double((x1 - x0) * (y1 - y0))
+}
 func toned(_ fx: Int, _ fy: Int) -> Double {
     var blur = 0.0
     for dy in -2...2 { for dx in -2...2 { blur += raw(fx + dx, fy + dy) } }
     blur /= 25
     var v = raw(fx, fy) + sharpen * (raw(fx, fy) - blur)
+    if localR > 0 { v += localAmt * (raw(fx, fy) - boxMean(fx, fy, localR)) }
     // black point: everything at or below it is pure background
     v = (v - black) / max(0.01, whitePoint - black)
     if v <= 0 { return 0 }
@@ -137,7 +156,7 @@ func toned(_ fx: Int, _ fy: Int) -> Double {
 }
 // Floyd–Steinberg error diffusion on the primary lattice (serpentine)
 var level = [Double](repeating: 0, count: cols * rows)
-for row in 0..<rows { for col in 0..<cols { level[row * cols + col] = toned(col * 2, row * 2) } }
+for row in 0..<rows { for col in 0..<cols { level[row * cols + col] = min(1, toned(col * 2, row * 2) / dotsFull) } }
 var onGrid = [Bool](repeating: false, count: cols * rows)
 for row in 0..<rows {
     let ltr = row % 2 == 0
@@ -159,7 +178,7 @@ for row in 0..<rows {
         add(col, row + 1, 5.0 / 16); add(col + dir, row + 1, 1.0 / 16)
     }
 }
-var on = 0
+var on = 0, crosses = 0
 let r = pitch * 0.25
 func th(_ at: Double, _ row: Int, _ col: Int, _ shift: Int) -> Double {
     at + 0.22 * bayer[((row + shift) % 8) * 8 + ((col + shift * 3) % 8)]
@@ -190,9 +209,11 @@ for row in 0..<rows { for col in 0..<cols {
     func crossAt(_ c: Int, _ rw: Int) -> Bool { c < cols && rw < rows && crossGrid[rw * cols + c] }
     let me = crossAt(col, row)
     if me {
-        let lv = 0.82 + 0.18 * min(1, v / white), hw = pitch * 0.11
+        let lv = 0.9 + 0.1 * min(1, v / white), hw = pitch * crossWidth
+        dot(cx, cy, r * 1.15, 1)
         bar(cx - pitch / 2, cy, cx + pitch / 2, cy, hw, lv)
         bar(cx, cy - pitch / 2, cx, cy + pitch / 2, hw, lv)
+        crosses += 1
     }
     let rs = r * 0.6
     if !(me || crossAt(col + 1, row)) && vh > th(fineAt, row, col, 2) * white {
@@ -205,6 +226,8 @@ for row in 0..<rows { for col in 0..<cols {
     let closed = me && crossAt(col + 1, row) && crossAt(col, row + 1) && crossAt(col + 1, row + 1)
     if !closed && vd > th(fineAt, row, col, 3) * white {
         dot(cx + pitch / 2, cy + pitch / 2, rs, 0.55 + 0.3 * min(1, vd / white))
+    } else if closed {
+        dot(cx + pitch / 2, cy + pitch / 2, rs * 0.8, 0.45)  // dim centre, as in the reference mesh
     }
 } }
 if soften > 0 {   // separable 1-2-1 blur, mixed in by `soften`, peaks lifted back
@@ -224,4 +247,4 @@ let op = out.data!.assumingMemoryBound(to: UInt8.self)
 for i in 0..<(outW * outH) { let v = UInt8(min(255, alpha[i] * 255)); op[i*4] = v; op[i*4+1] = v; op[i*4+2] = v; op[i*4+3] = v }
 let d = CGImageDestinationCreateWithURL(URL(fileURLWithPath: outPath) as CFURL, "public.png" as CFString, 1, nil)!
 CGImageDestinationAddImage(d, out.makeImage()!, nil); CGImageDestinationFinalize(d)
-print("wrote \(outPath) \(outW)x\(outH) lattice \(cols)x\(rows) dots=\(on)")
+print("wrote \(outPath) \(outW)x\(outH) lattice \(cols)x\(rows) dots=\(on) crosses=\(crosses)")
