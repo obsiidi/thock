@@ -1,10 +1,12 @@
 // Tools/dotart.swift — renders photos in the dot-matrix style of site/portrait.png.
 // site/bust.png:
 //   swift Tools/dotart.swift IN.webp site/bust.png --crop 68,25,662,1180 --smear 594,1069,114,114,1,-1 \
-//     --fill 90,1078,266,106,25 --width 880 --pitch 6.5 --white 1.0 --sharpen 2.2 --black 0.125 --wp 0.34 \
-//     --gamma 0.8 --contrast 1.4
+//     --fill 90,1078,266,106,25 --width 880 --pitch 6.5 --white 1.0 --black 0.125 --wp 0.32 --gamma 1.1 \
+//     --contrast 1.8 --sharpen 1.5 --fine 0.5 --cross 0.8 --soften 1
 // --patch copies texture from above, --smear continues it along a direction
 // (for diagonal folds), --fill paints a flat gray (for overlays on background).
+// --fine and --cross switch on the reference's tone ladder: dots, fine grid,
+// "+" crosses, mesh; --soften blurs the dots like the reference's soft blobs.
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -20,6 +22,8 @@ var crop: CGRect?; var patches: [(CGRect, Int)] = []
 var smears: [(CGRect, Int, Int)] = []; var fills: [(CGRect, UInt8)] = []
 var outW = 880; var pitch = 6.5; var gamma = 1.4; var contrast = 1.15; var lift = 0.0
 var sharpen = 0.9; var white = 0.9; var black = 0.0; var whitePoint = 1.0
+var fineAt = 2.0; var crossAt = 2.0     // tone thresholds for the fine grid and the crosses (off by default)
+var soften = 0.0                         // blur of the finished dots, like the soft blobs of the reference
 while !a.isEmpty {
     let k = a.removeFirst(), v = a.removeFirst()
     let n = v.split(separator: ",").compactMap { Double($0) }
@@ -37,6 +41,9 @@ while !a.isEmpty {
     case "--white": white = Double(v)!
     case "--black": black = Double(v)!
     case "--wp": whitePoint = Double(v)!
+    case "--fine": fineAt = Double(v)!
+    case "--cross": crossAt = Double(v)!
+    case "--soften": soften = Double(v)!
     default: fatalError("unknown \(k)")
     }
 }
@@ -99,6 +106,20 @@ func dot(_ cx: Double, _ cy: Double, _ r: Double, _ level: Double) {
         if cov > alpha[y * outW + x] { alpha[y * outW + x] = cov }
     } }
 }
+// capsule from (ax, ay) to (bx, by): the arms of the highlight crosses
+func bar(_ ax: Double, _ ay: Double, _ bx: Double, _ by: Double, _ hw: Double, _ level: Double) {
+    let x0 = max(0, Int(min(ax, bx) - hw - 1)), x1 = min(outW - 1, Int(max(ax, bx) + hw + 1))
+    let y0 = max(0, Int(min(ay, by) - hw - 1)), y1 = min(outH - 1, Int(max(ay, by) + hw + 1))
+    if x0 > x1 || y0 > y1 { return }
+    let dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy
+    for y in y0...y1 { for x in x0...x1 {
+        let px = Double(x) + 0.5, py = Double(y) + 0.5
+        let t = max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
+        let qx = ax + t * dx - px, qy = ay + t * dy - py
+        let cov = min(1, max(0, hw + 0.5 - (qx * qx + qy * qy).squareRoot())) * level
+        if cov > alpha[y * outW + x] { alpha[y * outW + x] = cov }
+    } }
+}
 // Tone per lattice cell: unsharp mask on the fine grid (keeps chainmail and
 // engraving), contrast, gamma, highlight compression.
 let fw2 = cols * 2, fh2 = rows * 2
@@ -140,15 +161,64 @@ for row in 0..<rows {
 }
 var on = 0
 let r = pitch * 0.25
+func th(_ at: Double, _ row: Int, _ col: Int, _ shift: Int) -> Double {
+    at + 0.22 * bayer[((row + shift) % 8) * 8 + ((col + shift * 3) % 8)]
+}
+var crossGrid = [Bool](repeating: false, count: cols * rows)
+if fineAt <= 1 {
+    for row in 0..<rows { for col in 0..<cols where onGrid[row * cols + col] {
+        crossGrid[row * cols + col] = toned(col * 2, row * 2) > th(crossAt, row, col, 0) * white
+    } }
+}
 for row in 0..<rows { for col in 0..<cols {
+    let cx = ox + Double(col) * pitch, cy = oy + Double(row) * pitch
     let v = toned(col * 2, row * 2)
-    if onGrid[row * cols + col] { dot(ox + Double(col) * pitch, oy + Double(row) * pitch, r, 0.7 + 0.3 * min(1, v / white)); on += 1 }
-    // half-offset lattice: only in strong highlights
-    let v2 = toned(col * 2 + 1, row * 2 + 1)
-    if v2 > (0.74 + 0.26 * bayer[((row + 4) % 8) * 8 + ((col + 4) % 8)]) * white {
-        dot(ox + (Double(col) + 0.5) * pitch, oy + (Double(row) + 0.5) * pitch, r * 0.9, 0.62 + 0.3 * min(1, v2 / white))
+    let here = onGrid[row * cols + col]
+    if here { dot(cx, cy, r, 0.7 + 0.3 * min(1, v / white)); on += 1 }
+    if fineAt > 1 {
+        // classic mode: half-offset lattice only in strong highlights
+        let v2 = toned(col * 2 + 1, row * 2 + 1)
+        if v2 > (0.74 + 0.26 * bayer[((row + 4) % 8) * 8 + ((col + 4) % 8)]) * white {
+            dot(cx + pitch / 2, cy + pitch / 2, r * 0.9, 0.62 + 0.3 * min(1, v2 / white))
+        }
+        continue
+    }
+    // Tone ladder of the reference art: lattice dots, then a fine grid (small
+    // dots between them), then "+" crosses on the lattice dots whose arms meet
+    // into a mesh with dark holes in the brightest areas.
+    let vh = toned(col * 2 + 1, row * 2), vv = toned(col * 2, row * 2 + 1), vd = toned(col * 2 + 1, row * 2 + 1)
+    func crossAt(_ c: Int, _ rw: Int) -> Bool { c < cols && rw < rows && crossGrid[rw * cols + c] }
+    let me = crossAt(col, row)
+    if me {
+        let lv = 0.82 + 0.18 * min(1, v / white), hw = pitch * 0.11
+        bar(cx - pitch / 2, cy, cx + pitch / 2, cy, hw, lv)
+        bar(cx, cy - pitch / 2, cx, cy + pitch / 2, hw, lv)
+    }
+    let rs = r * 0.6
+    if !(me || crossAt(col + 1, row)) && vh > th(fineAt, row, col, 2) * white {
+        dot(cx + pitch / 2, cy, rs, 0.55 + 0.3 * min(1, vh / white))
+    }
+    if !(me || crossAt(col, row + 1)) && vv > th(fineAt, row, col, 6) * white {
+        dot(cx, cy + pitch / 2, rs, 0.55 + 0.3 * min(1, vv / white))
+    }
+    // the cell centre stays a dark hole once the crosses around it close
+    let closed = me && crossAt(col + 1, row) && crossAt(col, row + 1) && crossAt(col + 1, row + 1)
+    if !closed && vd > th(fineAt, row, col, 3) * white {
+        dot(cx + pitch / 2, cy + pitch / 2, rs, 0.55 + 0.3 * min(1, vd / white))
     }
 } }
+if soften > 0 {   // separable 1-2-1 blur, mixed in by `soften`, peaks lifted back
+    var tmp = alpha
+    for y in 0..<outH { for x in 0..<outW {
+        let l = alpha[y * outW + max(0, x - 1)], c = alpha[y * outW + x], rr = alpha[y * outW + min(outW - 1, x + 1)]
+        tmp[y * outW + x] = (l + 2 * c + rr) / 4
+    } }
+    for y in 0..<outH { for x in 0..<outW {
+        let u = tmp[max(0, y - 1) * outW + x], c = tmp[y * outW + x], d = tmp[min(outH - 1, y + 1) * outW + x]
+        let b = (u + 2 * c + d) / 4
+        alpha[y * outW + x] = min(1, (alpha[y * outW + x] * (1 - soften) + b * soften) * (1 + 0.35 * soften))
+    } }
+}
 let out = CGContext(data: nil, width: outW, height: outH, bitsPerComponent: 8, bytesPerRow: outW * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
 let op = out.data!.assumingMemoryBound(to: UInt8.self)
 for i in 0..<(outW * outH) { let v = UInt8(min(255, alpha[i] * 255)); op[i*4] = v; op[i*4+1] = v; op[i*4+2] = v; op[i*4+3] = v }
