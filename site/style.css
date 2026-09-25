@@ -175,7 +175,12 @@ main { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
 .pack.own span { font-size: 11.5px; line-height: 1.7; color: var(--ink-3); }
 
 /* Trackpad + stats sections */
-.packs.mice { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.packs.mice { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
+.knight { width: min(440px, 100%); aspect-ratio: 880 / 1565; justify-self: end; }
+.knight canvas { width: 100%; height: 100%; cursor: crosshair; }
+@media (max-width: 760px) {
+  .knight { justify-self: center; max-width: 360px; }
+}
 .card-fig { margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .card-fig img { width: 100%; height: auto; display: block; border: 1px solid var(--line); }
 .card-fig figcaption { font-size: 11.5px; color: var(--ink-4); }
