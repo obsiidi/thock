@@ -34,7 +34,7 @@
     cvs.forEach(function (cv) {
       if (cv.__bound) return;
       cv.__bound = true;
-      if (cv.dataset.mode === 'mark') {
+      if (cv.dataset.mode === 'mark' || cv.dataset.mode === 'photo') {
         cv.addEventListener('pointermove', onMove);
         cv.addEventListener('pointerleave', onLeave);
       }
@@ -131,6 +131,11 @@
     var cols = Math.max(1, Math.floor(w / step)), rows = Math.max(1, Math.floor(h / step));
     var ox = (w - (cols - 1) * step) / 2, oy = (h - (rows - 1) * step) / 2;
 
+    if (mode === 'photo') {
+      measurePhoto(cv, w, h);
+      return;
+    }
+
     if (mode !== 'mark') {
       cv.__grid = { w: w, h: h, step: step, cols: cols, rows: rows, ox: ox, oy: oy, mode: mode, seed: parseFloat(cv.dataset.seed) || 1 };
       if (mode === 'force' && (!levels || levels.length !== cols)) levels = new Float32Array(cols);
@@ -213,9 +218,78 @@
     cv.__grid = { w: w, h: h, step: step, cols: cols, rows: rows, ox: ox, oy: oy, cov: cov, glow: glow, rad0: rad0, al0: al0, keep: keep, mode: mode };
   }
 
+  // --- photo: an image shown 1:1, lit by the cursor, rippled by typing -------
+  var photos = {};
+  function measurePhoto(cv, w, h) {
+    var src = cv.dataset.src;
+    var img = photos[src];
+    if (!img) {
+      img = photos[src] = new Image();
+      img.onload = function () { measure(cv); draw(cv); };
+      img.src = src;
+    }
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.__grid = { w: w, h: h, mode: 'photo', dpr: dpr, img: img, glow: document.createElement('canvas') };
+  }
+
+  function drawPhoto(cv, g) {
+    var img = g.img;
+    var pw = Math.round(g.w * g.dpr), ph = Math.round(g.h * g.dpr);
+    if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+    var ctx = cv.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, pw, ph);
+    if (!img.complete || !img.naturalWidth) return;
+    ctx.imageSmoothingQuality = 'high';
+    var hv = REACTIVE ? (cv.__h || 0) : 0;
+    var pp = cv.__ps || cv.__p || cv.__lp;
+    var lit = REACTIVE && pp && hv > 0.002;
+    var pl = REACTIVE ? pulse : 0;
+    // Untouched, the picture is drawn exactly as it is. With the cursor on
+    // it (or while a keystroke ripples) the rest dims and the light restores it.
+    ctx.globalAlpha = 1 - 0.5 * hv - 0.3 * pl;
+    ctx.drawImage(img, 0, 0, pw, ph);
+    ctx.globalAlpha = 1;
+    if (!lit && pl <= 0) return;
+
+    // Glow layer: the picture again, masked by a light shape, added on top —
+    // only the existing dots brighten, the dark background stays dark.
+    var gl = g.glow;
+    if (gl.width !== pw || gl.height !== ph) { gl.width = pw; gl.height = ph; }
+    var gx = gl.getContext('2d');
+    gx.globalCompositeOperation = 'source-over';
+    gx.clearRect(0, 0, pw, ph);
+    if (lit) {
+      var cx = pp.x * g.dpr, cy = pp.y * g.dpr, rad = 150 * g.dpr;
+      var lamp = gx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      lamp.addColorStop(0, 'rgba(255,255,255,' + (0.95 * hv) + ')');
+      lamp.addColorStop(0.55, 'rgba(255,255,255,' + (0.35 * hv) + ')');
+      lamp.addColorStop(1, 'rgba(255,255,255,0)');
+      gx.fillStyle = lamp;
+      gx.fillRect(0, 0, pw, ph);
+    }
+    if (pl > 0) {
+      var mx = pw / 2, my = ph * 0.45;
+      var maxR = Math.hypot(pw, ph) * 0.6;
+      var r0 = (1 - pl) * maxR, ring = 70 * g.dpr;
+      var wave = gx.createRadialGradient(mx, my, Math.max(0, r0 - ring), mx, my, r0 + ring);
+      wave.addColorStop(0, 'rgba(255,255,255,0)');
+      wave.addColorStop(0.5, 'rgba(255,255,255,' + (0.8 * pl) + ')');
+      wave.addColorStop(1, 'rgba(255,255,255,0)');
+      gx.fillStyle = wave;
+      gx.fillRect(0, 0, pw, ph);
+    }
+    gx.globalCompositeOperation = 'destination-in';
+    gx.drawImage(img, 0, 0, pw, ph);
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(gl, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   // --- draw -----------------------------------------------------------------
   function draw(cv) {
     var g = cv.__grid; if (!g) return;
+    if (g.mode === 'photo') { drawPhoto(cv, g); return; }
     var dpr = Math.min(2, window.devicePixelRatio || 1);
     var pw = Math.round(g.w * dpr), ph = Math.round(g.h * dpr);
     if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }

@@ -263,6 +263,10 @@ pre {
 .finale .title { max-width: 640px; font-size: clamp(26px, 3.6vw, 40px); line-height: 1.15; }
 .finale p { margin: 0; max-width: 520px; font-size: 12px; line-height: 1.8; color: var(--ink-4); text-wrap: pretty; }
 
+/* Portrait (dot-matrix picture: cursor lights it, typing ripples it) */
+.portrait { width: min(507px, 100%); aspect-ratio: 1014 / 1528; }
+.portrait canvas { width: 100%; height: 100%; cursor: crosshair; }
+
 /* Footer */
 footer { border-top: 1px solid var(--line); }
 .foot {
