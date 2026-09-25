@@ -1,6 +1,7 @@
-// Tools/dotart.swift — used to render site/knight.png:
-//   swift Tools/dotart.swift IN.webp site/knight.png --crop 0,0,658,1170 --patch 526,904,112,114,112 \
-//     --patch 524,1052,116,98,112 --width 880 --pitch 6.5 --gamma 2.1 --contrast 1.35 --sharpen 1.5 --white 1.0
+// Tools/dotart.swift — renders photos in the dot-matrix style of site/portrait.png.
+// site/bust.png:
+//   swift Tools/dotart.swift IN.webp site/bust.png --crop 14,2,1174,1172 --patch 1052,907,122,116,112 \
+//     --patch 1052,1039,118,118,112 --width 880 --pitch 6.5 --black 0.15 --wp 0.6 --gamma 0.8 --contrast 1.1 --sharpen 1.5 --white 1.0
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -14,7 +15,7 @@ var a = Array(CommandLine.arguments.dropFirst())
 let inPath = a.removeFirst(), outPath = a.removeFirst()
 var crop: CGRect?; var patches: [(CGRect, Int)] = []
 var outW = 880; var pitch = 6.5; var gamma = 1.4; var contrast = 1.15; var lift = 0.0
-var sharpen = 0.9; var white = 0.9
+var sharpen = 0.9; var white = 0.9; var black = 0.0; var whitePoint = 1.0
 while !a.isEmpty {
     let k = a.removeFirst(), v = a.removeFirst()
     let n = v.split(separator: ",").compactMap { Double($0) }
@@ -28,6 +29,8 @@ while !a.isEmpty {
     case "--lift": lift = Double(v)!
     case "--sharpen": sharpen = Double(v)!
     case "--white": white = Double(v)!
+    case "--black": black = Double(v)!
+    case "--wp": whitePoint = Double(v)!
     default: fatalError("unknown \(k)")
     }
 }
@@ -86,6 +89,9 @@ func toned(_ fx: Int, _ fy: Int) -> Double {
     for dy in -2...2 { for dx in -2...2 { blur += raw(fx + dx, fy + dy) } }
     blur /= 25
     var v = raw(fx, fy) + sharpen * (raw(fx, fy) - blur)
+    // black point: everything at or below it is pure background
+    v = (v - black) / max(0.01, whitePoint - black)
+    if v <= 0 { return 0 }
     v = (v - 0.5) * contrast + 0.5 + lift
     return pow(min(1, max(0, v)), gamma) * white
 }
@@ -99,6 +105,9 @@ for row in 0..<rows {
         let col = ltr ? k : cols - 1 - k
         let i = row * cols + col
         let v = level[i]
+        // very dark cells stay empty and do not spread their error, so the
+        // background is clean black like the reference artwork
+        if toned(col * 2, row * 2) < 0.04 { continue }
         let q: Double = v >= 0.5 ? 1 : 0
         onGrid[i] = q == 1
         let err = v - q
