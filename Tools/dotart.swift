@@ -1,7 +1,10 @@
 // Tools/dotart.swift — renders photos in the dot-matrix style of site/portrait.png.
 // site/bust.png:
-//   swift Tools/dotart.swift IN.webp site/bust.png --crop 14,2,1174,1172 --patch 1052,907,122,116,112 \
-//     --patch 1052,1039,118,118,112 --width 880 --pitch 6.5 --black 0.15 --wp 0.6 --gamma 0.8 --contrast 1.1 --sharpen 1.5 --white 1.0
+//   swift Tools/dotart.swift IN.webp site/bust.png --crop 68,25,662,1180 --smear 594,1069,114,114,1,-1 \
+//     --fill 90,1078,266,106,25 --width 880 --pitch 6.5 --white 1.0 --sharpen 2.2 --black 0.125 --wp 0.34 \
+//     --gamma 0.8 --contrast 1.4
+// --patch copies texture from above, --smear continues it along a direction
+// (for diagonal folds), --fill paints a flat gray (for overlays on background).
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -14,6 +17,7 @@ import ImageIO
 var a = Array(CommandLine.arguments.dropFirst())
 let inPath = a.removeFirst(), outPath = a.removeFirst()
 var crop: CGRect?; var patches: [(CGRect, Int)] = []
+var smears: [(CGRect, Int, Int)] = []; var fills: [(CGRect, UInt8)] = []
 var outW = 880; var pitch = 6.5; var gamma = 1.4; var contrast = 1.15; var lift = 0.0
 var sharpen = 0.9; var white = 0.9; var black = 0.0; var whitePoint = 1.0
 while !a.isEmpty {
@@ -22,6 +26,8 @@ while !a.isEmpty {
     switch k {
     case "--crop": crop = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
     case "--patch": patches.append((CGRect(x: n[0], y: n[1], width: n[2], height: n[3]), n.count > 4 ? Int(n[4]) : 110))
+    case "--smear": smears.append((CGRect(x: n[0], y: n[1], width: n[2], height: n[3]), Int(n[4]), Int(n[5])))
+    case "--fill": fills.append((CGRect(x: n[0], y: n[1], width: n[2], height: n[3]), UInt8(n[4])))
     case "--width": outW = Int(v)!
     case "--pitch": pitch = Double(v)!
     case "--gamma": gamma = Double(v)!
@@ -45,6 +51,19 @@ for (r, dy) in patches {       // top-left origin; copy texture from dy pixels a
     for y in Int(r.minY)..<min(fh, Int(r.maxY)) {
         for x in Int(r.minX)..<min(fw, Int(r.maxX)) { gp[y * fw + x] = gp[max(0, y - dy) * fw + x] }
     }
+}
+for (r, sx, sy) in smears {    // walk in direction (sx, sy) to the first pixel outside r, so diagonal folds continue
+    let x0 = Int(r.minX), x1 = Int(r.maxX), y0 = Int(r.minY), y1 = Int(r.maxY)
+    for y in y0..<min(fh, y1) {
+        for x in x0..<min(fw, x1) {
+            var qx = x, qy = y
+            while qx >= x0 && qx < x1 && qy >= y0 && qy < y1 { qx += sx; qy += sy }
+            gp[y * fw + x] = gp[min(fh - 1, max(0, qy)) * fw + min(fw - 1, max(0, qx))]
+        }
+    }
+}
+for (r, level) in fills {
+    for y in Int(r.minY)..<min(fh, Int(r.maxY)) { for x in Int(r.minX)..<min(fw, Int(r.maxX)) { gp[y * fw + x] = level } }
 }
 let cleaned = g.makeImage()!
 let c = crop ?? CGRect(x: 0, y: 0, width: fw, height: fh)
