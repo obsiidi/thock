@@ -409,6 +409,21 @@ kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
   --all` zeigt sie (`pd … pressure=`). Mapping −6…0 dB funktioniert auch,
   wenn der Trackpad immer 1 meldet (dann einfach volle Lautstärke).
 
+## Videos (2026-09-28)
+- `Tools/promo.swift`: 33-s-Promo im Website-Stil (flach, Punktraster).
+- `Tools/demo/`: 35-s-Demo in 3D (SceneKit): Laptop aus Primitiven mit
+  beweglichen, hinterleuchteten Tasten, Kamerafahrten mit Tiefenunschärfe
+  und Bewegungsunschärfe, auf dem Bildschirm die **echte** App-Oberfläche.
+  Musik wird im Code synthetisiert (104 BPM, A-Moll, keine Samples, keine
+  Lizenzfrage), Tastengeräusche aus den Packs, synchron zu jedem Anschlag.
+- Neuer CLI-Modus `thock --render-popover DIR`: zeichnet das echte Popover
+  (dunkel, 2x) für jedes Pack plus Menüleisten-Symbol. Startet nichts,
+  stellt berührte Einstellungen wieder her, Statistik aus leerer Temp-Datei.
+  Schalter erscheinen grau (Fenster offscreen = inaktiv), das ist macOS.
+- Ablauf: `swift build -c release && .build/release/thock --render-popover
+  dist/popover`, dann `swiftc -O Tools/demo/*.swift -o /tmp/demo &&
+  /tmp/demo dist/thock-demo.mp4`. Ergebnis in `dist/` (nicht im Repo).
+
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
    `Casks/thock.rb` = `Tools/homebrew/thock.rb`.

@@ -73,7 +73,9 @@ final class AppState: ObservableObject {
         get { defaults.bool(forKey: Keys.onboarded) }
         set { defaults.set(newValue, forKey: Keys.onboarded) }
     }
-    var version: String { UpdateChecker.currentVersion }
+    var version: String { versionOverride ?? UpdateChecker.currentVersion }
+    /// --render-popover runs outside the app bundle; it shows the release version instead of 0.0.0.
+    var versionOverride: String?
 
     /// Local typing statistics (counts only), fed from the drain thread.
     let typing = TypingStats()
@@ -103,10 +105,12 @@ final class AppState: ObservableObject {
         didSet {
             guard mouseSetID != oldValue else { return }
             defaults.set(mouseSetID, forKey: Keys.mouseSet)
-            if permissionGranted { run() }
+            if permissionGranted && !preview { run() }
         }
     }
     private var statsTimer: Timer?
+    /// Set by --render-popover: the popover is drawn, but nothing starts.
+    var preview = false
 
     let verbose: Bool
     let bufferFrames: UInt32
@@ -388,6 +392,7 @@ final class AppState: ObservableObject {
     }
 
     private func switchPack(to id: String) {
+        if preview { return }
         defaults.set(id, forKey: Keys.pack)
         guard permissionGranted else {
             checkPermissionAndRun()

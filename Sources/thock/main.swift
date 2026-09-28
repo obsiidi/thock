@@ -24,6 +24,7 @@ enum Mode {
     case statsCard
     case selftestStats
     case selftestPointer
+    case renderPopover
 }
 
 var mode: Mode = .app
@@ -41,6 +42,7 @@ var ioFrames: UInt32 = 128
 var jitter: Float = 0.03
 var velocity = true
 var cardPath = "thock-week.png"
+var renderDir = "dist/popover"
 
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
@@ -74,6 +76,14 @@ while !args.isEmpty {
         args.removeFirst()
         cardPath = v
         mode = .statsCard
+    case "--render-popover":
+        guard let v = args.first else {
+            stderrLine("thock: --render-popover needs an output folder")
+            exit(64)
+        }
+        args.removeFirst()
+        renderDir = v
+        mode = .renderPopover
     case "--all":
         printAll = true
     case "--selftest":
@@ -202,6 +212,7 @@ case .help:
       --no-velocity         ignore the accelerometer (fixed loudness)
       --stats               print the local typing stats summary
       --stats-card PATH     render this week's share card as PNG
+      --render-popover DIR  draw the real popover (every pack) as PNGs, for the demo video
       --selftest-stats      synthetic keystrokes -> stats counters and file; exit 0/1
       --selftest-pointer    synthetic clicks and scrolls -> mouse sounds; exit 0/1
       --selftest-tap        capture-only self-test, no audio; exit 0/1
@@ -237,6 +248,8 @@ case .selftestStats:
     exit(runStatsSelftest(count: count ?? 30))
 case .selftestPointer:
     exit(runPointerSelftest(clicks: count ?? 20))
+case .renderPopover:
+    exit(runRenderPopover(dir: renderDir))
 case .autostart:
     exit(runAutostart(autostartArg))
 case .listPacks:

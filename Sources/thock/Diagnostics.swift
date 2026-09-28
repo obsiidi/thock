@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import Foundation
 import CoreGraphics
 import AVFoundation
@@ -1261,4 +1262,100 @@ func runPointerSelftest(clicks: Int = 20) -> Int32 {
     }
     failures.forEach { print("selftest-pointer: FAIL — \($0)") }
     return 1
+}
+
+// MARK: - Popover images for the demo video
+
+/// Draws the real popover in dark mode at 2x, once per bundled pack, plus the
+/// menu bar icon, so Tools/demo can show the actual app on its laptop screen.
+/// Nothing starts: no engine, no tap. Settings touched while drawing are put
+/// back afterwards, and the stats come from an empty temporary file.
+func runRenderPopover(dir: String) -> Int32 {
+    let tmpStats = FileManager.default.temporaryDirectory.appendingPathComponent("thock-render-\(getpid()).json")
+    setenv("THOCK_STATS_FILE", tmpStats.path, 1)
+    let domain = Bundle.main.bundleIdentifier ?? ProcessInfo.processInfo.processName
+    let saved = UserDefaults.standard.persistentDomain(forName: domain)
+    defer {
+        if let saved { UserDefaults.standard.setPersistentDomain(saved, forName: domain) }
+        else { UserDefaults.standard.removePersistentDomain(forName: domain) }
+        try? FileManager.default.removeItem(at: tmpStats)
+    }
+    let out = URL(fileURLWithPath: dir)
+    try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+    let app = NSApplication.shared
+    app.setActivationPolicy(.prohibited)
+    return MainActor.assumeIsolated {
+        let state = AppState(verbose: false, bufferFrames: 128)
+        state.preview = true
+        state.packs = Resources.allPackEntries()
+        state.mouseSets = Resources.mouseEntries()
+        state.permissionGranted = true
+        state.running = true
+        state.enabled = true
+        state.volume = 0.62
+        state.velocityEnabled = true
+        state.sensitivitySlider = 0.6
+        state.keyUpSounds = true
+        state.pointerSounds = true
+        state.scrollTicks = false
+        state.keepStats = true
+        if let info = NSDictionary(contentsOfFile: "Tools/Info.plist"),
+           let v = info["CFBundleShortVersionString"] as? String { state.versionOverride = v }
+
+        let host = NSHostingView(rootView: PopoverView(state: state))
+        host.appearance = NSAppearance(named: .darkAqua)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 320, height: 400), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .clear
+        window.contentView = host
+        func snapshot(_ name: String) -> Bool {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+            // a sample line in the real format (the stats file here is empty)
+            state.todayLine = "Today 3,214 keys · 71 wpm peak · 6-day streak"
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            host.frame = NSRect(origin: .zero, size: host.fittingSize)
+            host.layoutSubtreeIfNeeded()
+            guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return false }
+            host.cacheDisplay(in: host.bounds, to: rep)
+            guard let png = rep.representation(using: .png, properties: [:]) else { return false }
+            do { try png.write(to: out.appendingPathComponent(name)) } catch { return false }
+            print("render-popover: \(name) \(rep.pixelsWide)x\(rep.pixelsHigh)")
+            return true
+        }
+        for pack in state.packs where !pack.directory.path.contains("Application Support") {
+            state.selectedPack = pack.id
+            state.status = "Active — \(pack.name)"
+            state.packHasKeyUp = packHasKeyUp(pack.directory)
+            guard snapshot("popover-\(pack.id).png") else { return 1 }
+        }
+        // the menu bar icon, white, at 2x, as the status item shows it
+        let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
+        guard let symbol = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)?
+            .withSymbolConfiguration(config),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(symbol.size.width * 2),
+                                         pixelsHigh: Int(symbol.size.height * 2), bitsPerSample: 8, samplesPerPixel: 4,
+                                         hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+                                         bytesPerRow: 0, bitsPerPixel: 0) else { return 1 }
+        rep.size = symbol.size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        let rect = NSRect(origin: .zero, size: symbol.size)
+        symbol.draw(in: rect)
+        NSColor.white.set()
+        rect.fill(using: .sourceAtop)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = rep.representation(using: .png, properties: [:]),
+              (try? png.write(to: out.appendingPathComponent("statusicon.png"))) != nil else { return 1 }
+        print("render-popover: statusicon.png")
+        return 0
+    }
+}
+
+/// Whether a Mechvibes pack defines key-release sounds (from its config.json).
+private func packHasKeyUp(_ dir: URL) -> Bool {
+    guard let data = try? Data(contentsOf: dir.appendingPathComponent("config.json")),
+          let cfg = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+    if cfg["soundup"] != nil { return true }
+    return (cfg["defines"] as? [String: Any])?.keys.contains { $0.hasSuffix("-up") } ?? false
 }

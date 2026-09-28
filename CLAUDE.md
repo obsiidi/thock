@@ -57,6 +57,10 @@ Sources/thock/
 Tools/
   bundle.sh             dist/thock.app bauen und signieren (thock-dev)
   make-cert.sh          selbstsigniertes Codesign-Zertifikat anlegen
+  promo.swift           flaches Promo-Video (Punktraster-Stil) → dist/
+  demo/                 3D-Demo-Video (SceneKit, echte App via
+                        `thock --render-popover`, eigene Musik) → dist/
+  dotart.swift          Fotos → Punktraster-Bilder für die Website
 ```
 
 ---
