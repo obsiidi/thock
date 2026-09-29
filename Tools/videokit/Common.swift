@@ -3,7 +3,7 @@ import CoreText
 import Foundation
 import ImageIO
 
-// Shared constants and helpers for the demo video.
+// Shared constants and helpers for the videos in Tools/demo and Tools/motion.
 
 let W = 1920, H = 1080, FPS = 30, SR = 48_000
 let BPM = 104.0
@@ -11,7 +11,6 @@ let beat = 60 / BPM
 let bar = beat * 4
 /// Start time of bar `n` (1-based), plus `b` beats.
 func at(_ n: Int, _ b: Double = 0) -> Double { Double(n - 1) * bar + b * beat }
-let total = at(16) + 0.2
 
 struct RNG {
     var s: UInt64

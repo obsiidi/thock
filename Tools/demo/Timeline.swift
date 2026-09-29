@@ -12,6 +12,8 @@ import Foundation
 //  12   trackpad clicks                          "Clicks sound like a mouse again."
 //  13–15 hero shot, wordmark, end card
 
+let total = at(16) + 0.2
+
 struct PackInfo { let id: String; let name: String; let kind: String }
 let packInfos = [
     PackInfo(id: "cherrymx-blue-abs", name: "Cherry MX Blue", kind: "clicky"),

@@ -423,6 +423,15 @@ kein Fremd-Request entsteht. CSP: `script-src 'self'`. Dunkles Einzel-Theme
 - Ablauf: `swift build -c release && .build/release/thock --render-popover
   dist/popover`, dann `swiftc -O Tools/demo/*.swift -o /tmp/demo &&
   /tmp/demo dist/thock-demo.mp4`. Ergebnis in `dist/` (nicht im Repo).
+- `Tools/motion/`: helles Motion-Design-Video (35 s): Laptop zeichnet sich
+  selbst, Zoom in die Menüleiste, Popover mit Pack-Menü (NK Cream wird
+  gewählt), getippte Headline, F/J leicht vs. fest, sieben Pack-Karten,
+  Trackpad, Statistik-Fenster füllt sich, Punktraster-Schriftzug. UI als
+  animierte Vektoren im macOS-Light-Look nachgezeichnet. NK Cream ist der
+  Standard-Klang. Build: `swiftc -O Tools/videokit/*.swift
+  Tools/motion/*.swift -o /tmp/motion && /tmp/motion dist/thock-motion.mp4`.
+- `Tools/videokit/`: gemeinsamer Code (Packs, Mixer, Synth, Encoder); die
+  Demo baut jetzt mit `swiftc -O Tools/videokit/*.swift Tools/demo/*.swift`.
 
 ## Offene Punkte
 1. **Homebrew-Tap** (optional): Repo `obsiidi/homebrew-thock`, Datei
